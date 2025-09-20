@@ -57,6 +57,24 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        editor: {
+          background: "hsl(var(--editor-background))",
+          panel: "hsl(var(--editor-panel))",
+          border: "hsl(var(--editor-border))",
+          text: "hsl(var(--editor-text))",
+          comment: "hsl(var(--editor-comment))",
+          keyword: "hsl(var(--editor-keyword))",
+          string: "hsl(var(--editor-string))",
+          number: "hsl(var(--editor-number))",
+        },
+      },
+      backgroundImage: {
+        'gradient-primary': 'var(--gradient-primary)',
+        'gradient-background': 'var(--gradient-background)',
+      },
+      transitionProperty: {
+        'smooth': 'var(--transition-smooth)',
+        'fast': 'var(--transition-fast)',
       },
       borderRadius: {
         lg: "var(--radius)",
