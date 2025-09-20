@@ -142,19 +142,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
     syntaxHighlighting(highlightStyle),
     keymap.of([
       {
-        key: "Cmd-Enter",
-        preventDefault: true,
-        run: () => {
-          if (onRefresh) {
-            onRefresh();
-            toast.success("Diagram refreshed!");
-          }
-          return true;
-        }
-      },
-      {
-        key: "Ctrl-Enter",
-        preventDefault: true,
+        key: "Mod-Enter",
         run: () => {
           if (onRefresh) {
             onRefresh();
