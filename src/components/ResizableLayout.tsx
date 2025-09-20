@@ -10,8 +10,12 @@ interface ResizableLayoutProps {
 
 export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false }: ResizableLayoutProps) => {
   const [leftWidth, setLeftWidth] = useState(() => {
-    const saved = localStorage.getItem('plantuml-left-width');
-    return saved ? JSON.parse(saved) : 50;
+    try {
+      const saved = localStorage.getItem('plantuml-left-width');
+      return saved ? JSON.parse(saved) : 50;
+    } catch {
+      return 50;
+    }
   }); // percentage
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);

@@ -23,17 +23,29 @@ B -> U: Display Page
 @enduml`);
 
   const [showTemplates, setShowTemplates] = useState(() => {
-    const saved = localStorage.getItem('plantuml-show-templates');
-    return saved ? JSON.parse(saved) : false;
+    try {
+      const saved = localStorage.getItem('plantuml-show-templates');
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
   });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeEditorTab, setActiveEditorTab] = useState<'full' | 'setup' | 'sequence'>(() => {
-    const saved = localStorage.getItem('plantuml-active-tab');
-    return saved ? JSON.parse(saved) : 'full';
+    try {
+      const saved = localStorage.getItem('plantuml-active-tab');
+      return saved ? JSON.parse(saved) : 'full';
+    } catch {
+      return 'full';
+    }
   });
   const [showLeftPanel, setShowLeftPanel] = useState(() => {
-    const saved = localStorage.getItem('plantuml-show-left-panel');
-    return saved ? JSON.parse(saved) : true;
+    try {
+      const saved = localStorage.getItem('plantuml-show-left-panel');
+      return saved ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
   });
 
   const handleTemplateSelect = (template: string) => {
