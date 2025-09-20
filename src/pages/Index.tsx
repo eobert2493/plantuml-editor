@@ -22,14 +22,24 @@ B -> U: Display Page
 
 @enduml`);
 
-  const [showTemplates, setShowTemplates] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(() => {
+    const saved = localStorage.getItem('plantuml-show-templates');
+    return saved ? JSON.parse(saved) : false;
+  });
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeEditorTab, setActiveEditorTab] = useState<'full' | 'setup' | 'sequence'>('full');
-  const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [activeEditorTab, setActiveEditorTab] = useState<'full' | 'setup' | 'sequence'>(() => {
+    const saved = localStorage.getItem('plantuml-active-tab');
+    return saved ? JSON.parse(saved) : 'full';
+  });
+  const [showLeftPanel, setShowLeftPanel] = useState(() => {
+    const saved = localStorage.getItem('plantuml-show-left-panel');
+    return saved ? JSON.parse(saved) : true;
+  });
 
   const handleTemplateSelect = (template: string) => {
     setPlantUMLCode(template);
     setShowTemplates(false);
+    localStorage.setItem('plantuml-show-templates', JSON.stringify(false));
     // Auto-refresh when template is selected
     setRefreshTrigger(prev => prev + 1);
   };
@@ -42,9 +52,11 @@ B -> U: Display Page
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
       event.preventDefault();
-      setShowLeftPanel(prev => !prev);
+      const newShowLeftPanel = !showLeftPanel;
+      setShowLeftPanel(newShowLeftPanel);
+      localStorage.setItem('plantuml-show-left-panel', JSON.stringify(newShowLeftPanel));
     }
-  }, []);
+  }, [showLeftPanel]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -98,7 +110,10 @@ B -> U: Display Page
               <Button
                 variant={activeEditorTab === 'full' ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setActiveEditorTab('full')}
+                onClick={() => {
+                  setActiveEditorTab('full');
+                  localStorage.setItem('plantuml-active-tab', JSON.stringify('full'));
+                }}
                 className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
               >
                 <FileText className="w-3 h-3 mr-1" />
@@ -107,7 +122,10 @@ B -> U: Display Page
               <Button
                 variant={activeEditorTab === 'setup' ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setActiveEditorTab('setup')}
+                onClick={() => {
+                  setActiveEditorTab('setup');
+                  localStorage.setItem('plantuml-active-tab', JSON.stringify('setup'));
+                }}
                 className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
               >
                 <Settings className="w-3 h-3 mr-1" />
@@ -116,7 +134,10 @@ B -> U: Display Page
               <Button
                 variant={activeEditorTab === 'sequence' ? 'secondary' : 'ghost'}
                 size="sm"
-                onClick={() => setActiveEditorTab('sequence')}
+                onClick={() => {
+                  setActiveEditorTab('sequence');
+                  localStorage.setItem('plantuml-active-tab', JSON.stringify('sequence'));
+                }}
                 className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
               >
                 <ArrowRight className="w-3 h-3 mr-1" />

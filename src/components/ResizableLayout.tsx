@@ -9,7 +9,10 @@ interface ResizableLayoutProps {
 }
 
 export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false }: ResizableLayoutProps) => {
-  const [leftWidth, setLeftWidth] = useState(50); // percentage
+  const [leftWidth, setLeftWidth] = useState(() => {
+    const saved = localStorage.getItem('plantuml-left-width');
+    return saved ? JSON.parse(saved) : 50;
+  }); // percentage
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -27,6 +30,7 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
     // Constrain between 20% and 80%
     const clampedWidth = Math.max(20, Math.min(80, newLeftWidth));
     setLeftWidth(clampedWidth);
+    localStorage.setItem('plantuml-left-width', JSON.stringify(clampedWidth));
   }, [isDragging]);
 
   const handleMouseUp = useCallback(() => {
