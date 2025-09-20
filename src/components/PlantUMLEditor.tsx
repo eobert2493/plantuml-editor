@@ -1,23 +1,33 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Copy, FileText, Download } from "lucide-react";
+import { Copy, FileText, Download, Zap } from "lucide-react";
 
 interface PlantUMLEditorProps {
   value: string;
   onChange: (value: string) => void;
-  onFormat?: () => void;
+  onRefresh?: () => void;
 }
 
-export const PlantUMLEditor = ({ value, onChange, onFormat }: PlantUMLEditorProps) => {
+export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorProps) => {
   const [lineCount, setLineCount] = useState(1);
 
   useEffect(() => {
     const lines = value.split('\n').length;
     setLineCount(lines);
   }, [value]);
+
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (onRefresh) {
+        onRefresh();
+        toast.success("Diagram refreshed!");
+      }
+    }
+  }, [onRefresh]);
 
   const handleCopy = async () => {
     try {
@@ -52,6 +62,18 @@ export const PlantUMLEditor = ({ value, onChange, onFormat }: PlantUMLEditorProp
           </span>
         </div>
         <div className="flex items-center gap-1">
+          {onRefresh && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onRefresh}
+              className="h-8 px-2 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+              title="Refresh diagram (Cmd+Enter)"
+            >
+              <Zap className="w-3 h-3 mr-1" />
+              <span className="text-xs">Refresh</span>
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -75,6 +97,7 @@ export const PlantUMLEditor = ({ value, onChange, onFormat }: PlantUMLEditorProp
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Start typing your PlantUML diagram here..."
           className="h-full resize-none bg-editor-background border-0 text-editor-text placeholder:text-editor-comment font-mono text-sm focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none pl-14 leading-6"
           style={{

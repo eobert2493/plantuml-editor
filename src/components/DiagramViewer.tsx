@@ -1,23 +1,28 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { RefreshCw, Download, Maximize2, Eye } from "lucide-react";
+import { RefreshCw, Download, Maximize2, Eye, Zap } from "lucide-react";
 import * as plantumlEncoder from "plantuml-encoder";
 
 interface DiagramViewerProps {
   plantUMLCode: string;
+  onRefresh?: () => void;
 }
 
-export const DiagramViewer = ({ plantUMLCode }: DiagramViewerProps) => {
+export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) => {
   const [diagramUrl, setDiagramUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
+  const [lastGeneratedCode, setLastGeneratedCode] = useState<string>("");
+  const [needsRefresh, setNeedsRefresh] = useState(false);
 
-  const generateDiagram = async () => {
+  const generateDiagram = useCallback(async () => {
     if (!plantUMLCode.trim()) {
       setDiagramUrl("");
       setError("");
+      setLastGeneratedCode("");
+      setNeedsRefresh(false);
       return;
     }
 
@@ -29,22 +34,32 @@ export const DiagramViewer = ({ plantUMLCode }: DiagramViewerProps) => {
       const encoded = plantumlEncoder.encode(plantUMLCode);
       const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
       setDiagramUrl(url);
+      setLastGeneratedCode(plantUMLCode);
+      setNeedsRefresh(false);
+      toast.success("Diagram updated!");
     } catch (err) {
-      setError("Failed to generate diagram");
-      toast.error("Failed to generate diagram");
+      setError("Invalid PlantUML syntax");
       console.error("PlantUML encoding error:", err);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      generateDiagram();
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
   }, [plantUMLCode]);
+
+  // Check if diagram needs refresh when code changes
+  useEffect(() => {
+    if (plantUMLCode !== lastGeneratedCode && lastGeneratedCode !== "") {
+      setNeedsRefresh(true);
+    } else if (plantUMLCode === lastGeneratedCode) {
+      setNeedsRefresh(false);
+    }
+  }, [plantUMLCode, lastGeneratedCode]);
+
+  // Generate initial diagram
+  useEffect(() => {
+    if (plantUMLCode.trim() && lastGeneratedCode === "") {
+      generateDiagram();
+    }
+  }, [plantUMLCode, lastGeneratedCode, generateDiagram]);
 
   const handleDownload = async () => {
     if (!diagramUrl) {
@@ -80,6 +95,12 @@ export const DiagramViewer = ({ plantUMLCode }: DiagramViewerProps) => {
         <div className="flex items-center gap-2">
           <Eye className="w-4 h-4 text-editor-keyword" />
           <h3 className="text-sm font-medium text-editor-text">Diagram Preview</h3>
+          {needsRefresh && !isLoading && (
+            <div className="flex items-center gap-1 text-xs text-amber-400">
+              <Zap className="w-3 h-3" />
+              <span>Press Cmd+Enter to refresh</span>
+            </div>
+          )}
           {isLoading && (
             <div className="w-3 h-3 border border-editor-keyword border-t-transparent rounded-full animate-spin" />
           )}

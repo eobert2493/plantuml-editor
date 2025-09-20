@@ -19,10 +19,17 @@ Bob --> Alice: Working on PlantUML diagrams
 @enduml`);
 
   const [showTemplates, setShowTemplates] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleTemplateSelect = (template: string) => {
     setPlantUMLCode(template);
     setShowTemplates(false);
+    // Auto-refresh when template is selected
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleRefresh = () => {
+    setRefreshTrigger(prev => prev + 1);
   };
 
   return (
@@ -85,10 +92,15 @@ Bob --> Alice: Working on PlantUML diagrams
               <PlantUMLEditor
                 value={plantUMLCode}
                 onChange={setPlantUMLCode}
+                onRefresh={handleRefresh}
               />
             }
             rightPanel={
-              <DiagramViewer plantUMLCode={plantUMLCode} />
+              <DiagramViewer 
+                plantUMLCode={plantUMLCode} 
+                key={refreshTrigger}
+                onRefresh={handleRefresh}
+              />
             }
           />
         </div>
@@ -103,7 +115,7 @@ Bob --> Alice: Working on PlantUML diagrams
           <div className="flex items-center gap-4">
             <span>PlantUML Server Online</span>
             <span>•</span>
-            <span>Auto-refresh enabled</span>
+            <span>Press Cmd+Enter to refresh</span>
           </div>
         </div>
       </footer>
