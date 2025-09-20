@@ -76,20 +76,28 @@ export const PlantUMLEditor = ({ value, onChange, onFormat }: PlantUMLEditorProp
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Start typing your PlantUML diagram here..."
-          className="h-full resize-none bg-editor-background border-0 text-editor-text placeholder:text-editor-comment font-mono text-sm leading-relaxed focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none"
+          className="h-full resize-none bg-editor-background border-0 text-editor-text placeholder:text-editor-comment font-mono text-sm focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none pl-14 leading-6"
           style={{
             minHeight: '100%',
-            paddingLeft: '3rem',
+            padding: '12px 12px 12px 56px',
+            lineHeight: '24px',
           }}
         />
         
         {/* Line numbers */}
-        <div className="absolute left-0 top-0 bottom-0 w-12 bg-editor-panel border-r border-editor-border flex flex-col text-xs text-editor-comment font-mono pt-3 pb-3">
+        <div className="absolute left-0 top-0 bottom-0 w-12 bg-editor-panel border-r border-editor-border flex flex-col text-xs text-editor-comment font-mono select-none"
+             style={{
+               padding: '12px 8px 12px 4px',
+               lineHeight: '24px',
+             }}>
           {Array.from({ length: lineCount }, (_, i) => (
             <div
               key={i + 1}
-              className="h-6 flex items-center justify-end pr-2"
-              style={{ lineHeight: '1.5rem' }}
+              className="flex items-center justify-end min-h-6"
+              style={{ 
+                height: '24px',
+                lineHeight: '24px'
+              }}
             >
               {i + 1}
             </div>
