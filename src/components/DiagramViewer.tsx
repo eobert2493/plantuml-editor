@@ -8,6 +8,7 @@ import * as plantumlEncoder from "plantuml-encoder";
 interface DiagramViewerProps {
   plantUMLCode: string;
   onRefresh?: () => void;
+  editorTab?: 'full' | 'setup' | 'sequence';
 }
 
 export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) => {

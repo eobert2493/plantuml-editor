@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Copy, FileText, Download, Zap } from "lucide-react";
+import { Copy, FileText, Download, Zap, Settings, ArrowRight, Users } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { plantuml } from "@/lib/plantuml-lang";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -15,13 +15,129 @@ interface PlantUMLEditorProps {
   onRefresh?: () => void;
 }
 
+interface CodeSection {
+  name: string;
+  startMarkers: string[];
+  endMarkers: string[];
+  icon: string;
+}
+
 export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorProps) => {
   const [lineCount, setLineCount] = useState(1);
+  const [activeTab, setActiveTab] = useState<'full' | 'setup' | 'sequence'>('full');
+  
+  // Define code sections
+  const codeSections: Record<string, CodeSection> = {
+    setup: {
+      name: 'Setup',
+      startMarkers: ['@startuml', 'participant', 'actor', 'boundary', 'control', 'entity', 'database', 'collections', 'queue', 'box', 'title', 'skinparam', 'note', 'legend'],
+      endMarkers: ['->', '<-', '-->', '<--', '..>', '<..'],
+      icon: 'settings'
+    },
+    sequence: {
+      name: 'Sequence',
+      startMarkers: ['->', '<-', '-->', '<--', '..>', '<..', 'activate', 'deactivate', 'note', 'alt', 'else', 'opt', 'loop', 'par', 'break'],
+      endMarkers: ['@enduml'],
+      icon: 'flow'
+    }
+  };
 
   useEffect(() => {
     const lines = value.split('\n').length;
     setLineCount(lines);
   }, [value]);
+
+  // Parse content based on active tab
+  const getDisplayContent = useCallback(() => {
+    if (activeTab === 'full') {
+      return value;
+    }
+
+    const lines = value.split('\n');
+    let displayLines: string[] = [];
+    let inTargetSection = false;
+
+    if (activeTab === 'setup') {
+      // Include @startuml and setup elements
+      for (const line of lines) {
+        const trimmed = line.trim();
+        
+        if (trimmed.startsWith('@startuml') || 
+            trimmed.startsWith('title') ||
+            trimmed.startsWith('participant') ||
+            trimmed.startsWith('actor') ||
+            trimmed.startsWith('boundary') ||
+            trimmed.startsWith('control') ||
+            trimmed.startsWith('entity') ||
+            trimmed.startsWith('database') ||
+            trimmed.startsWith('collections') ||
+            trimmed.startsWith('queue') ||
+            trimmed.startsWith('box') ||
+            trimmed.startsWith('skinparam') ||
+            trimmed.startsWith('note') && !trimmed.includes('->') ||
+            trimmed.startsWith('legend') ||
+            trimmed.startsWith('!') ||
+            trimmed === '' ||
+            trimmed.startsWith("'")) {
+          displayLines.push(line);
+        } else if (trimmed.includes('->') || trimmed.includes('<-')) {
+          // Stop at first sequence interaction
+          break;
+        }
+      }
+      displayLines.push('@enduml');
+      
+    } else if (activeTab === 'sequence') {
+      // Include setup + sequence interactions
+      let setupLines: string[] = [];
+      let sequenceLines: string[] = [];
+      let foundSequence = false;
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        
+        if (!foundSequence && (
+          trimmed.startsWith('@startuml') || 
+          trimmed.startsWith('title') ||
+          trimmed.startsWith('participant') ||
+          trimmed.startsWith('actor') ||
+          trimmed.startsWith('boundary') ||
+          trimmed.startsWith('control') ||
+          trimmed.startsWith('entity') ||
+          trimmed.startsWith('database') ||
+          trimmed.startsWith('collections') ||
+          trimmed.startsWith('queue') ||
+          trimmed.startsWith('box') ||
+          trimmed.startsWith('skinparam') ||
+          trimmed.startsWith('!') ||
+          trimmed === '' ||
+          trimmed.startsWith("'"))) {
+          setupLines.push(line);
+        } else if (trimmed.includes('->') || 
+                  trimmed.includes('<-') ||
+                  trimmed.startsWith('activate') ||
+                  trimmed.startsWith('deactivate') ||
+                  trimmed.startsWith('note') ||
+                  trimmed.startsWith('alt') ||
+                  trimmed.startsWith('else') ||
+                  trimmed.startsWith('opt') ||
+                  trimmed.startsWith('loop') ||
+                  trimmed.startsWith('par') ||
+                  trimmed.startsWith('break') ||
+                  trimmed.startsWith('==') ||
+                  foundSequence) {
+          foundSequence = true;
+          if (!trimmed.startsWith('@enduml')) {
+            sequenceLines.push(line);
+          }
+        }
+      }
+      
+      displayLines = [...setupLines, '', ...sequenceLines, '@enduml'];
+    }
+
+    return displayLines.join('\n');
+  }, [value, activeTab]);
 
   // Create syntax highlighting theme
   const highlightStyle = HighlightStyle.define([
@@ -157,10 +273,16 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
       
       <div className="flex-1 overflow-hidden">
         <CodeMirror
-          value={value}
-          onChange={(val) => onChange(val)}
+          value={activeTab === 'full' ? value : getDisplayContent()}
+          onChange={(val) => {
+            if (activeTab === 'full') {
+              onChange(val);
+            }
+            // For filtered views, we'll just show read-only content
+          }}
           extensions={extensions}
           placeholder="Start typing your PlantUML diagram here..."
+          editable={activeTab === 'full'}
           basicSetup={{
             lineNumbers: true,
             foldGutter: false,
@@ -179,6 +301,39 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
             overflow: 'auto',
           }}
         />
+      </div>
+      
+      {/* Tab Navigation */}
+      <div className="border-t border-editor-border bg-editor-panel px-3 py-2">
+        <div className="flex items-center gap-1">
+          <Button
+            variant={activeTab === 'full' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('full')}
+            className="h-7 px-2 text-xs text-editor-comment hover:text-editor-text"
+          >
+            <FileText className="w-3 h-3 mr-1" />
+            Full
+          </Button>
+          <Button
+            variant={activeTab === 'setup' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('setup')}
+            className="h-7 px-2 text-xs text-editor-comment hover:text-editor-text"
+          >
+            <Settings className="w-3 h-3 mr-1" />
+            Setup
+          </Button>
+          <Button
+            variant={activeTab === 'sequence' ? 'secondary' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('sequence')}
+            className="h-7 px-2 text-xs text-editor-comment hover:text-editor-text"
+          >
+            <ArrowRight className="w-3 h-3 mr-1" />
+            Sequence
+          </Button>
+        </div>
       </div>
     </Card>
   );

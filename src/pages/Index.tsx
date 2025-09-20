@@ -11,15 +11,20 @@ const Index = () => {
   const [plantUMLCode, setPlantUMLCode] = useState(`@startuml
 title Simple Example
 
-Alice -> Bob: Hello Bob, how are you?
-Bob --> Alice: I am good thanks!
-Alice -> Bob: What are you doing?
-Bob --> Alice: Working on PlantUML diagrams
+participant "User" as U
+participant "Browser" as B  
+participant "Server" as S
+
+U -> B: Enter URL
+B -> S: HTTP Request
+S -> B: HTTP Response  
+B -> U: Display Page
 
 @enduml`);
 
   const [showTemplates, setShowTemplates] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeEditorTab, setActiveEditorTab] = useState<'full' | 'setup' | 'sequence'>('full');
 
   const handleTemplateSelect = (template: string) => {
     setPlantUMLCode(template);
