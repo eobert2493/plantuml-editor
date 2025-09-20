@@ -45,19 +45,38 @@ User ||--o{ Comment : writes
   {
     name: "Sequence Diagram",
     icon: Workflow,
-    description: "Message flow between objects",
+    description: "Message flow between objects with sections",
     code: `@startuml
-actor User
-participant "Web Browser" as Browser
-participant "Web Server" as Server
-database "Database" as DB
+title User Login Process
 
-User -> Browser: Enter URL
-Browser -> Server: HTTP Request
-Server -> DB: Query Data
-DB -> Server: Return Data
-Server -> Browser: HTTP Response
-Browser -> User: Display Page
+participant "User" as U
+participant "Web Browser" as B
+participant "Auth Service" as A
+participant "Database" as D
+
+=== Initial Request ===
+
+U -> B: Enter credentials
+B -> A: Login request
+A -> D: Validate user
+D -> A: User data
+A -> B: Authentication token
+
+=== Session Management ===
+
+B -> A: Request protected resource
+A -> A: Validate token
+A -> B: Resource data
+B -> U: Display protected content
+
+=== Logout Process ===
+
+U -> B: Click logout
+B -> A: Logout request
+A -> A: Invalidate token
+A -> B: Logout confirmation
+B -> U: Redirect to login
+
 @enduml`
   },
   {

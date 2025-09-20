@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { RefreshCw, Download, Maximize2, Eye, Zap } from "lucide-react";
+import { RefreshCw, Download, Maximize2, Eye, Zap, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
 import * as plantumlEncoder from "plantuml-encoder";
 
 interface DiagramViewerProps {
@@ -16,6 +16,91 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
   const [error, setError] = useState<string>("");
   const [lastGeneratedCode, setLastGeneratedCode] = useState<string>("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
+  const [sections, setSections] = useState<Array<{name: string, code: string, url: string}>>([]);
+  const [currentSection, setCurrentSection] = useState(0);
+  const [viewMode, setViewMode] = useState<'full' | 'sections'>('full');
+
+  // Parse sections from PlantUML code
+  const parseSections = useCallback((code: string) => {
+    const lines = code.split('\n');
+    const sectionMarkers: number[] = [];
+    const sectionNames: string[] = [];
+    
+    // Find section markers
+    lines.forEach((line, index) => {
+      const match = line.match(/^===\s*(.+?)\s*===/);
+      if (match) {
+        sectionMarkers.push(index);
+        sectionNames.push(match[1]);
+      }
+    });
+
+    if (sectionMarkers.length === 0) {
+      return [];
+    }
+
+    // Extract participant declarations and initial setup
+    const setupLines: string[] = [];
+    let foundStart = false;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      if (line.startsWith('@startuml')) {
+        setupLines.push(lines[i]);
+        foundStart = true;
+        continue;
+      }
+      
+      if (!foundStart) continue;
+      
+      // Stop at first section marker
+      if (line.match(/^===\s*.+?\s*===/)) break;
+      
+      // Include participant declarations, titles, and other setup
+      if (line.startsWith('participant') || 
+          line.startsWith('actor') || 
+          line.startsWith('boundary') || 
+          line.startsWith('control') || 
+          line.startsWith('entity') || 
+          line.startsWith('database') || 
+          line.startsWith('collections') || 
+          line.startsWith('queue') || 
+          line.startsWith('title') || 
+          line.startsWith('skinparam') || 
+          line.startsWith('!') || 
+          line === '' || 
+          line.startsWith("'")) {
+        setupLines.push(lines[i]);
+      }
+    }
+
+    // Create sections
+    const sectionsData: Array<{name: string, code: string, url: string}> = [];
+    
+    for (let i = 0; i < sectionMarkers.length; i++) {
+      const startLine = sectionMarkers[i];
+      const endLine = i < sectionMarkers.length - 1 ? sectionMarkers[i + 1] : lines.length;
+      
+      const sectionLines = [
+        ...setupLines,
+        '', // Empty line separator
+        lines[startLine], // Section marker
+        ...lines.slice(startLine + 1, endLine).filter(line => !line.match(/^@enduml/)),
+        '@enduml'
+      ];
+      
+      const sectionCode = sectionLines.join('\n');
+      
+      sectionsData.push({
+        name: sectionNames[i],
+        code: sectionCode,
+        url: ''
+      });
+    }
+    
+    return sectionsData;
+  }, []);
 
   const generateDiagram = useCallback(async () => {
     if (!plantUMLCode.trim()) {
@@ -23,6 +108,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
       setError("");
       setLastGeneratedCode("");
       setNeedsRefresh(false);
+      setSections([]);
       return;
     }
 
@@ -30,10 +116,34 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
     setError("");
 
     try {
-      // Use the proper plantuml-encoder which handles deflate compression
-      const encoded = plantumlEncoder.encode(plantUMLCode);
-      const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
-      setDiagramUrl(url);
+      // Parse sections
+      const parsedSections = parseSections(plantUMLCode);
+      
+      if (parsedSections.length > 0) {
+        // Generate URLs for all sections
+        const sectionsWithUrls = await Promise.all(
+          parsedSections.map(async (section) => {
+            const encoded = plantumlEncoder.encode(section.code);
+            return {
+              ...section,
+              url: `https://www.plantuml.com/plantuml/svg/${encoded}`
+            };
+          })
+        );
+        
+        setSections(sectionsWithUrls);
+        setCurrentSection(0);
+        setViewMode('sections');
+        setDiagramUrl(sectionsWithUrls[0]?.url || '');
+      } else {
+        // Generate full diagram
+        const encoded = plantumlEncoder.encode(plantUMLCode);
+        const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
+        setDiagramUrl(url);
+        setSections([]);
+        setViewMode('full');
+      }
+      
       setLastGeneratedCode(plantUMLCode);
       setNeedsRefresh(false);
       toast.success("Diagram updated!");
@@ -43,7 +153,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
     } finally {
       setIsLoading(false);
     }
-  }, [plantUMLCode]);
+  }, [plantUMLCode, parseSections]);
 
   // Check if diagram needs refresh when code changes
   useEffect(() => {
@@ -89,12 +199,62 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
     toast.success("Diagram refreshed!");
   };
 
+  const handleSectionChange = (index: number) => {
+    if (sections[index]) {
+      setCurrentSection(index);
+      setDiagramUrl(sections[index].url);
+    }
+  };
+
+  const toggleViewMode = () => {
+    if (sections.length > 0) {
+      if (viewMode === 'full') {
+        setViewMode('sections');
+        setDiagramUrl(sections[currentSection]?.url || '');
+      } else {
+        setViewMode('full');
+        const encoded = plantumlEncoder.encode(plantUMLCode);
+        setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+      }
+    }
+  };
+
   return (
     <Card className="h-full bg-editor-panel border-editor-border flex flex-col">
       <div className="flex items-center justify-between p-3 border-b border-editor-border">
         <div className="flex items-center gap-2">
           <Eye className="w-4 h-4 text-editor-keyword" />
           <h3 className="text-sm font-medium text-editor-text">Diagram Preview</h3>
+          
+          {/* Section navigation */}
+          {sections.length > 0 && viewMode === 'sections' && (
+            <div className="flex items-center gap-2 ml-4">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleSectionChange(Math.max(0, currentSection - 1))}
+                disabled={currentSection === 0}
+                className="h-6 w-6 p-0 text-editor-comment hover:text-editor-text"
+              >
+                <ChevronLeft className="w-3 h-3" />
+              </Button>
+              
+              <span className="text-xs text-editor-comment">
+                {sections[currentSection]?.name} ({currentSection + 1}/{sections.length})
+              </span>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleSectionChange(Math.min(sections.length - 1, currentSection + 1))}
+                disabled={currentSection === sections.length - 1}
+                className="h-6 w-6 p-0 text-editor-comment hover:text-editor-text"
+              >
+                <ChevronRight className="w-3 h-3" />
+              </Button>
+            </div>
+          )}
+          
           {needsRefresh && !isLoading && (
             <div className="flex items-center gap-1 text-xs text-amber-400">
               <Zap className="w-3 h-3" />
@@ -105,7 +265,22 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
             <div className="w-3 h-3 border border-editor-keyword border-t-transparent rounded-full animate-spin" />
           )}
         </div>
+        
         <div className="flex items-center gap-1">
+          {/* View mode toggle */}
+          {sections.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleViewMode}
+              className="h-8 px-2 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+              title={viewMode === 'full' ? 'Switch to section view' : 'Switch to full view'}
+            >
+              <Grid3X3 className="w-3 h-3 mr-1" />
+              <span className="text-xs">{viewMode === 'full' ? 'Sections' : 'Full'}</span>
+            </Button>
+          )}
+          
           <Button
             variant="ghost"
             size="sm"
