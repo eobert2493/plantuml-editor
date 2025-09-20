@@ -88,52 +88,37 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
       displayLines.push('@enduml');
       
     } else if (activeTab === 'sequence') {
-      // Include setup + sequence interactions
-      let setupLines: string[] = [];
-      let sequenceLines: string[] = [];
-      let foundSequence = false;
+      // Only show sequence interactions (no setup)
+      displayLines.push('@startuml');
+      displayLines.push('');
       
       for (const line of lines) {
         const trimmed = line.trim();
         
-        if (!foundSequence && (
-          trimmed.startsWith('@startuml') || 
-          trimmed.startsWith('title') ||
-          trimmed.startsWith('participant') ||
-          trimmed.startsWith('actor') ||
-          trimmed.startsWith('boundary') ||
-          trimmed.startsWith('control') ||
-          trimmed.startsWith('entity') ||
-          trimmed.startsWith('database') ||
-          trimmed.startsWith('collections') ||
-          trimmed.startsWith('queue') ||
-          trimmed.startsWith('box') ||
-          trimmed.startsWith('skinparam') ||
-          trimmed.startsWith('!') ||
-          trimmed === '' ||
-          trimmed.startsWith("'"))) {
-          setupLines.push(line);
-        } else if (trimmed.includes('->') || 
-                  trimmed.includes('<-') ||
-                  trimmed.startsWith('activate') ||
-                  trimmed.startsWith('deactivate') ||
-                  trimmed.startsWith('note') ||
-                  trimmed.startsWith('alt') ||
-                  trimmed.startsWith('else') ||
-                  trimmed.startsWith('opt') ||
-                  trimmed.startsWith('loop') ||
-                  trimmed.startsWith('par') ||
-                  trimmed.startsWith('break') ||
-                  trimmed.startsWith('==') ||
-                  foundSequence) {
-          foundSequence = true;
+        // Include sequence interactions and flow control
+        if (trimmed.includes('->') || 
+            trimmed.includes('<-') ||
+            trimmed.startsWith('activate') ||
+            trimmed.startsWith('deactivate') ||
+            trimmed.startsWith('note') && (trimmed.includes('->') || trimmed.includes('of') || trimmed.includes('over')) ||
+            trimmed.startsWith('alt') ||
+            trimmed.startsWith('else') ||
+            trimmed.startsWith('opt') ||
+            trimmed.startsWith('loop') ||
+            trimmed.startsWith('par') ||
+            trimmed.startsWith('break') ||
+            trimmed.startsWith('critical') ||
+            trimmed.startsWith('group') ||
+            trimmed.startsWith('end') ||
+            trimmed.startsWith('==') ||
+            (trimmed === '' && displayLines.length > 2)) { // Empty lines only after we've started adding content
           if (!trimmed.startsWith('@enduml')) {
-            sequenceLines.push(line);
+            displayLines.push(line);
           }
         }
       }
       
-      displayLines = [...setupLines, '', ...sequenceLines, '@enduml'];
+      displayLines.push('@enduml');
     }
 
     return displayLines.join('\n');
