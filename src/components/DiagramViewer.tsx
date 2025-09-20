@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { RefreshCw, Download, Maximize2, Eye } from "lucide-react";
+import * as plantumlEncoder from "plantuml-encoder";
 
 interface DiagramViewerProps {
   plantUMLCode: string;
@@ -12,14 +13,6 @@ export const DiagramViewer = ({ plantUMLCode }: DiagramViewerProps) => {
   const [diagramUrl, setDiagramUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
-
-  // Encode PlantUML code for URL using the correct format
-  const encodeUML = (uml: string): string => {
-    // Use deflate compression compatible encoding
-    const encoded = btoa(unescape(encodeURIComponent(uml)));
-    // Add the ~1 header for newer PlantUML server format
-    return `~1${encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')}`;
-  };
 
   const generateDiagram = async () => {
     if (!plantUMLCode.trim()) {
@@ -32,12 +25,14 @@ export const DiagramViewer = ({ plantUMLCode }: DiagramViewerProps) => {
     setError("");
 
     try {
-      const encoded = encodeUML(plantUMLCode);
+      // Use the proper plantuml-encoder which handles deflate compression
+      const encoded = plantumlEncoder.encode(plantUMLCode);
       const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
       setDiagramUrl(url);
     } catch (err) {
       setError("Failed to generate diagram");
       toast.error("Failed to generate diagram");
+      console.error("PlantUML encoding error:", err);
     } finally {
       setIsLoading(false);
     }
