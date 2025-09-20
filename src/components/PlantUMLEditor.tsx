@@ -6,7 +6,7 @@ import { Copy, FileText, Download, Zap, Settings, ArrowRight, Users } from "luci
 import CodeMirror from "@uiw/react-codemirror";
 import { plantuml } from "@/lib/plantuml-lang";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorView } from "@codemirror/view";
+import { EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 
 interface PlantUMLEditorProps {
@@ -140,6 +140,33 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
   const extensions = [
     plantuml(),
     syntaxHighlighting(highlightStyle),
+    EditorView.domEventHandlers({
+      keydown: (event, _view) => {
+        const e = event as KeyboardEvent;
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          e.preventDefault();
+          if (onRefresh) {
+            onRefresh();
+            toast.success("Diagram refreshed!");
+          }
+          return true;
+        }
+        return false;
+      },
+    }),
+    keymap.of([
+      {
+        key: "Mod-Enter",
+        preventDefault: true,
+        run: () => {
+          if (onRefresh) {
+            onRefresh();
+            toast.success("Diagram refreshed!");
+          }
+          return true;
+        },
+      },
+    ]),
     EditorView.theme({
       "&": {
         fontSize: "14px",
