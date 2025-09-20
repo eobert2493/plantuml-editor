@@ -5,7 +5,7 @@ import { ExampleTemplates } from "@/components/ExampleTemplates";
 import { ResizableLayout } from "@/components/ResizableLayout";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { FileCode2, Github, HelpCircle } from "lucide-react";
+import { FileCode2, Github, HelpCircle, FileText, Settings, ArrowRight } from "lucide-react";
 
 const Index = () => {
   const [plantUMLCode, setPlantUMLCode] = useState(`@startuml
@@ -98,6 +98,8 @@ B -> U: Display Page
                 value={plantUMLCode}
                 onChange={setPlantUMLCode}
                 onRefresh={handleRefresh}
+                activeTab={activeEditorTab}
+                onTabChange={setActiveEditorTab}
               />
             }
             rightPanel={
@@ -114,8 +116,41 @@ B -> U: Display Page
       {/* Footer */}
       <footer className="bg-editor-panel border-t border-editor-border px-4 py-2">
         <div className="flex items-center justify-between text-xs text-editor-comment">
-          <div>
-            Ready • {plantUMLCode.split('\n').length} lines
+          <div className="flex items-center gap-3">
+            {/* Editor Tab Navigation */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant={activeEditorTab === 'full' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveEditorTab('full')}
+                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
+              >
+                <FileText className="w-3 h-3 mr-1" />
+                Full
+              </Button>
+              <Button
+                variant={activeEditorTab === 'setup' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveEditorTab('setup')}
+                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
+              >
+                <Settings className="w-3 h-3 mr-1" />
+                Setup
+              </Button>
+              <Button
+                variant={activeEditorTab === 'sequence' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setActiveEditorTab('sequence')}
+                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
+              >
+                <ArrowRight className="w-3 h-3 mr-1" />
+                Sequence
+              </Button>
+            </div>
+            <div className="text-editor-border">•</div>
+            <div>
+              Ready • {plantUMLCode.split('\n').length} lines
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <span>PlantUML Server Online</span>

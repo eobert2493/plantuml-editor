@@ -13,6 +13,8 @@ interface PlantUMLEditorProps {
   value: string;
   onChange: (value: string) => void;
   onRefresh?: () => void;
+  activeTab?: 'full' | 'setup' | 'sequence';
+  onTabChange?: (tab: 'full' | 'setup' | 'sequence') => void;
 }
 
 interface CodeSection {
@@ -22,9 +24,8 @@ interface CodeSection {
   icon: string;
 }
 
-export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorProps) => {
+export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange }: PlantUMLEditorProps) => {
   const [lineCount, setLineCount] = useState(1);
-  const [activeTab, setActiveTab] = useState<'full' | 'setup' | 'sequence'>('full');
   
   // Define code sections
   const codeSections: Record<string, CodeSection> = {
@@ -286,39 +287,6 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
             overflow: 'auto',
           }}
         />
-      </div>
-      
-      {/* Tab Navigation */}
-      <div className="border-t border-editor-border bg-editor-panel px-3 py-2">
-        <div className="flex items-center gap-1">
-          <Button
-            variant={activeTab === 'full' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveTab('full')}
-            className="h-7 px-2 text-xs text-editor-comment hover:text-editor-text"
-          >
-            <FileText className="w-3 h-3 mr-1" />
-            Full
-          </Button>
-          <Button
-            variant={activeTab === 'setup' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveTab('setup')}
-            className="h-7 px-2 text-xs text-editor-comment hover:text-editor-text"
-          >
-            <Settings className="w-3 h-3 mr-1" />
-            Setup
-          </Button>
-          <Button
-            variant={activeTab === 'sequence' ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => setActiveTab('sequence')}
-            className="h-7 px-2 text-xs text-editor-comment hover:text-editor-text"
-          >
-            <ArrowRight className="w-3 h-3 mr-1" />
-            Sequence
-          </Button>
-        </div>
       </div>
     </Card>
   );
