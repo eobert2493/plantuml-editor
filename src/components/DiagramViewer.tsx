@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { RefreshCw, Download, Maximize2, Eye, Zap, ChevronLeft, ChevronRight, Grid3X3 } from "lucide-react";
+import { RefreshCw, Download, Maximize2, Eye, Zap, ChevronLeft, ChevronRight, Grid3X3, Layers } from "lucide-react";
 import * as plantumlEncoder from "plantuml-encoder";
 
 interface DiagramViewerProps {
@@ -18,7 +18,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [sections, setSections] = useState<Array<{name: string, code: string, url: string}>>([]);
   const [currentSection, setCurrentSection] = useState(0);
-  const [viewMode, setViewMode] = useState<'full' | 'sections'>('full');
+  const [viewMode, setViewMode] = useState<'full' | 'sections' | 'stacked'>('full');
 
   // Parse sections from PlantUML code
   const parseSections = useCallback((code: string) => {
@@ -211,11 +211,32 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
       if (viewMode === 'full') {
         setViewMode('sections');
         setDiagramUrl(sections[currentSection]?.url || '');
+      } else if (viewMode === 'sections') {
+        setViewMode('stacked');
+        setDiagramUrl(''); // Not needed for stacked view
       } else {
         setViewMode('full');
         const encoded = plantumlEncoder.encode(plantUMLCode);
         setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
       }
+    }
+  };
+
+  const getViewModeLabel = () => {
+    switch (viewMode) {
+      case 'full': return 'Full';
+      case 'sections': return 'Sections';
+      case 'stacked': return 'Stacked';
+      default: return 'Full';
+    }
+  };
+
+  const getViewModeIcon = () => {
+    switch (viewMode) {
+      case 'full': return <Eye className="w-3 h-3 mr-1" />;
+      case 'sections': return <Grid3X3 className="w-3 h-3 mr-1" />;
+      case 'stacked': return <Layers className="w-3 h-3 mr-1" />;
+      default: return <Eye className="w-3 h-3 mr-1" />;
     }
   };
 
@@ -226,7 +247,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
           <Eye className="w-4 h-4 text-editor-keyword" />
           <h3 className="text-sm font-medium text-editor-text">Diagram Preview</h3>
           
-          {/* Section navigation */}
+          {/* Section navigation - only show in sections mode */}
           {sections.length > 0 && viewMode === 'sections' && (
             <div className="flex items-center gap-2 ml-4">
               <Button
@@ -255,6 +276,15 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
             </div>
           )}
           
+          {/* Stacked mode indicator */}
+          {sections.length > 0 && viewMode === 'stacked' && (
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-xs text-editor-comment">
+                All sections ({sections.length} total)
+              </span>
+            </div>
+          )}
+          
           {needsRefresh && !isLoading && (
             <div className="flex items-center gap-1 text-xs text-amber-400">
               <Zap className="w-3 h-3" />
@@ -274,10 +304,10 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
               size="sm"
               onClick={toggleViewMode}
               className="h-8 px-2 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-              title={viewMode === 'full' ? 'Switch to section view' : 'Switch to full view'}
+              title={`Switch to ${viewMode === 'full' ? 'sections' : viewMode === 'sections' ? 'stacked' : 'full'} view`}
             >
-              <Grid3X3 className="w-3 h-3 mr-1" />
-              <span className="text-xs">{viewMode === 'full' ? 'Sections' : 'Full'}</span>
+              {getViewModeIcon()}
+              <span className="text-xs">{getViewModeLabel()}</span>
             </Button>
           )}
           
@@ -319,7 +349,32 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
               </div>
             </div>
           </div>
+        ) : viewMode === 'stacked' && sections.length > 0 ? (
+          // Stacked view - show all sections vertically
+          <div className="p-4 space-y-6">
+            {sections.map((section, index) => (
+              <div key={index} className="border border-editor-border rounded-lg overflow-hidden">
+                <div className="bg-editor-panel px-4 py-2 border-b border-editor-border">
+                  <h4 className="text-sm font-medium text-editor-text">
+                    {section.name}
+                  </h4>
+                  <p className="text-xs text-editor-comment">
+                    Section {index + 1} of {sections.length}
+                  </p>
+                </div>
+                <div className="p-4 bg-editor-background flex justify-center">
+                  <img
+                    src={section.url}
+                    alt={`Section: ${section.name}`}
+                    className="max-w-full h-auto"
+                    onError={() => setError(`Failed to load section: ${section.name}`)}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : diagramUrl ? (
+          // Single diagram view (full or current section)
           <div className="p-4 flex items-center justify-center min-h-full">
             <img
               src={diagramUrl}
