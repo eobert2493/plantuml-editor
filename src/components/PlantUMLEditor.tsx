@@ -176,16 +176,21 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
     }),
   ];
 
-  // Handle keyboard shortcuts - removed Cmd+Enter to avoid interference
+  // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    // No keyboard shortcuts in editor to avoid interference
-  }, []);
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      if (onRefresh) {
+        onRefresh();
+        toast.success("Diagram refreshed!");
+      }
+    }
+  }, [onRefresh]);
 
-  // No keyboard event listeners needed anymore
-  // useEffect(() => {
-  //   document.addEventListener('keydown', handleKeyDown);
-  //   return () => document.removeEventListener('keydown', handleKeyDown);
-  // }, [handleKeyDown]);
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleCopy = async () => {
     try {
