@@ -58,12 +58,12 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
   return (
     <div 
       ref={containerRef}
-      className={cn("flex h-full", className)}
+      className={cn("flex h-full w-full overflow-hidden", className)}
     >
       {/* Left Panel */}
       {!hideLeftPanel && leftPanel && (
         <div 
-          className="flex-shrink-0 overflow-hidden"
+          className="flex-shrink-0 overflow-hidden min-w-0"
           style={{ 
             width: `${leftWidth}%`,
             minWidth: `${leftWidth}%`,
@@ -90,7 +90,7 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
 
       {/* Right Panel */}
       <div 
-        className="overflow-hidden"
+        className="overflow-hidden min-w-0"
         style={{ 
           width: hideLeftPanel || !leftPanel ? '100%' : `${100 - leftWidth}%`,
           minWidth: hideLeftPanel || !leftPanel ? '100%' : `${100 - leftWidth}%`,
