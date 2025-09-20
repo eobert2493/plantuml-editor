@@ -6,7 +6,7 @@ import { Copy, FileText, Download, Zap, Settings, ArrowRight, Users } from "luci
 import CodeMirror from "@uiw/react-codemirror";
 import { plantuml } from "@/lib/plantuml-lang";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 
 interface PlantUMLEditorProps {
@@ -25,7 +25,6 @@ interface CodeSection {
 export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorProps) => {
   const [lineCount, setLineCount] = useState(1);
   const [activeTab, setActiveTab] = useState<'full' | 'setup' | 'sequence'>('full');
-  const [isEditorFocused, setIsEditorFocused] = useState(false);
   
   // Define code sections
   const codeSections: Record<string, CodeSection> = {
@@ -140,33 +139,6 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
   const extensions = [
     plantuml(),
     syntaxHighlighting(highlightStyle),
-    EditorView.domEventHandlers({
-      keydown: (event, _view) => {
-        const e = event as KeyboardEvent;
-        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-          e.preventDefault();
-          if (onRefresh) {
-            onRefresh();
-            toast.success("Diagram refreshed!");
-          }
-          return true;
-        }
-        return false;
-      },
-    }),
-    keymap.of([
-      {
-        key: "Mod-Enter",
-        preventDefault: true,
-        run: () => {
-          if (onRefresh) {
-            onRefresh();
-            toast.success("Diagram refreshed!");
-          }
-          return true;
-        },
-      },
-    ]),
     EditorView.theme({
       "&": {
         fontSize: "14px",
@@ -204,22 +176,21 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
     }),
   ];
 
-  // Refresh on Mod+Enter when editor is focused
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      if (!isEditorFocused) return;
-      if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-        event.preventDefault();
-        if (onRefresh) {
-          onRefresh();
-          toast.success('Diagram refreshed!');
-        }
+  // Handle keyboard shortcuts
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
+      if (onRefresh) {
+        onRefresh();
+        toast.success("Diagram refreshed!");
       }
-    };
-    document.addEventListener('keydown', handler);
-    return () => document.removeEventListener('keydown', handler);
-  }, [isEditorFocused, onRefresh]);
+    }
+  }, [onRefresh]);
 
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleCopy = async () => {
     try {
@@ -297,8 +268,6 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
           extensions={extensions}
           placeholder="Start typing your PlantUML diagram here..."
           editable={activeTab === 'full'}
-          onFocus={() => setIsEditorFocused(true)}
-          onBlur={() => setIsEditorFocused(false)}
           basicSetup={{
             lineNumbers: true,
             foldGutter: false,
