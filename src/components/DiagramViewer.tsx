@@ -26,9 +26,9 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
     const sectionMarkers: number[] = [];
     const sectionNames: string[] = [];
     
-    // Find section markers
+    // Find section markers (== Section Name ==)
     lines.forEach((line, index) => {
-      const match = line.match(/^===\s*(.+?)\s*===/);
+      const match = line.match(/^==\s*(.+?)\s*==/);
       if (match) {
         sectionMarkers.push(index);
         sectionNames.push(match[1]);
@@ -55,7 +55,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
       if (!foundStart) continue;
       
       // Stop at first section marker
-      if (line.match(/^===\s*.+?\s*===/)) break;
+      if (line.match(/^==\s*.+?\s*==/)) break;
       
       // Include participant declarations, titles, and other setup
       if (line.startsWith('participant') || 
@@ -206,37 +206,18 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
     }
   };
 
-  const toggleViewMode = () => {
+  const setViewModeDirectly = (mode: 'full' | 'sections' | 'stacked') => {
     if (sections.length > 0) {
-      if (viewMode === 'full') {
-        setViewMode('sections');
-        setDiagramUrl(sections[currentSection]?.url || '');
-      } else if (viewMode === 'sections') {
-        setViewMode('stacked');
-        setDiagramUrl(''); // Not needed for stacked view
-      } else {
-        setViewMode('full');
+      setViewMode(mode);
+      
+      if (mode === 'full') {
         const encoded = plantumlEncoder.encode(plantUMLCode);
         setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+      } else if (mode === 'sections') {
+        setDiagramUrl(sections[currentSection]?.url || '');
+      } else if (mode === 'stacked') {
+        setDiagramUrl(''); // Not needed for stacked view
       }
-    }
-  };
-
-  const getViewModeLabel = () => {
-    switch (viewMode) {
-      case 'full': return 'Full';
-      case 'sections': return 'Sections';
-      case 'stacked': return 'Stacked';
-      default: return 'Full';
-    }
-  };
-
-  const getViewModeIcon = () => {
-    switch (viewMode) {
-      case 'full': return <Eye className="w-3 h-3 mr-1" />;
-      case 'sections': return <Grid3X3 className="w-3 h-3 mr-1" />;
-      case 'stacked': return <Layers className="w-3 h-3 mr-1" />;
-      default: return <Eye className="w-3 h-3 mr-1" />;
     }
   };
 
@@ -297,18 +278,37 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
         </div>
         
         <div className="flex items-center gap-1">
-          {/* View mode toggle */}
+          {/* View mode toggle - Three separate buttons */}
           {sections.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleViewMode}
-              className="h-8 px-2 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-              title={`Switch to ${viewMode === 'full' ? 'sections' : viewMode === 'sections' ? 'stacked' : 'full'} view`}
-            >
-              {getViewModeIcon()}
-              <span className="text-xs">{getViewModeLabel()}</span>
-            </Button>
+            <div className="flex items-center gap-1 mr-2">
+              <Button
+                variant={viewMode === 'full' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeDirectly('full')}
+                className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+                title="Full diagram view"
+              >
+                <Eye className="w-3 h-3" />
+              </Button>
+              <Button
+                variant={viewMode === 'sections' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeDirectly('sections')}
+                className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+                title="Section navigation view"
+              >
+                <Grid3X3 className="w-3 h-3" />
+              </Button>
+              <Button
+                variant={viewMode === 'stacked' ? 'secondary' : 'ghost'}
+                size="sm"
+                onClick={() => setViewModeDirectly('stacked')}
+                className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+                title="Stacked sections view"
+              >
+                <Layers className="w-3 h-3" />
+              </Button>
+            </div>
           )}
           
           <Button

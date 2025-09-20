@@ -54,7 +54,7 @@ participant "Web Browser" as B
 participant "Auth Service" as A
 participant "Database" as D
 
-=== Initial Request ===
+== Initial Request ==
 
 U -> B: Enter credentials
 B -> A: Login request
@@ -62,14 +62,14 @@ A -> D: Validate user
 D -> A: User data
 A -> B: Authentication token
 
-=== Session Management ===
+== Session Management ==
 
 B -> A: Request protected resource
 A -> A: Validate token
 A -> B: Resource data
 B -> U: Display protected content
 
-=== Logout Process ===
+== Logout Process ==
 
 U -> B: Click logout
 B -> A: Logout request
