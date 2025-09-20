@@ -7,6 +7,7 @@ import CodeMirror from "@uiw/react-codemirror";
 import { plantuml } from "@/lib/plantuml-lang";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
+import { keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 
 interface PlantUMLEditorProps {
@@ -139,6 +140,30 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
   const extensions = [
     plantuml(),
     syntaxHighlighting(highlightStyle),
+    keymap.of([
+      {
+        key: "Cmd-Enter",
+        preventDefault: true,
+        run: () => {
+          if (onRefresh) {
+            onRefresh();
+            toast.success("Diagram refreshed!");
+          }
+          return true;
+        }
+      },
+      {
+        key: "Ctrl-Enter",
+        preventDefault: true,
+        run: () => {
+          if (onRefresh) {
+            onRefresh();
+            toast.success("Diagram refreshed!");
+          }
+          return true;
+        }
+      }
+    ]),
     EditorView.theme({
       "&": {
         fontSize: "14px",
@@ -176,21 +201,6 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
     }),
   ];
 
-  // Handle keyboard shortcuts
-  const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-      event.preventDefault();
-      if (onRefresh) {
-        onRefresh();
-        toast.success("Diagram refreshed!");
-      }
-    }
-  }, [onRefresh]);
-
-  useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
 
   const handleCopy = async () => {
     try {
