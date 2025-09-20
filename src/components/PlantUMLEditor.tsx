@@ -42,14 +42,18 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
       "&": {
         fontSize: "14px",
         fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+        height: "100%",
       },
       ".cm-content": {
         padding: "12px",
-        minHeight: "100%",
         color: "hsl(var(--editor-text))",
         caretColor: "hsl(var(--editor-keyword))",
       },
       ".cm-editor": {
+        height: "100%",
+      },
+      ".cm-scroller": {
+        fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
         height: "100%",
       },
       ".cm-focused": {
@@ -69,7 +73,6 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
         fontSize: "12px",
       },
     }),
-    EditorView.lineWrapping,
   ];
 
   // Handle keyboard shortcuts
@@ -152,7 +155,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
         </div>
       </div>
       
-      <div className="flex-1">
+      <div className="flex-1 overflow-hidden">
         <CodeMirror
           value={value}
           onChange={(val) => onChange(val)}
@@ -169,9 +172,11 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
             searchKeymap: true,
           }}
           theme="dark"
+          height="100%"
           style={{
             fontSize: '14px',
             height: '100%',
+            overflow: 'auto',
           }}
         />
       </div>
