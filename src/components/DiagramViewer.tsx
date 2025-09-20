@@ -376,13 +376,16 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
           </div>
         ) : diagramUrl ? (
           // Single diagram view (full or current section)
-          <div className="p-4 flex items-center justify-center min-h-full">
-            <img
-              src={diagramUrl}
-              alt="PlantUML Diagram"
-              className="max-w-full h-auto"
-              onError={() => setError("Failed to load diagram")}
-            />
+          <div className="p-4 flex items-center justify-center min-h-full w-full">
+            <div className="w-full flex justify-center">
+              <img
+                src={diagramUrl}
+                alt="PlantUML Diagram"
+                className="max-w-full h-auto"
+                onError={() => setError("Failed to load diagram")}
+                style={{ maxWidth: '100%', height: 'auto' }}
+              />
+            </div>
           </div>
         ) : (
           <div className="flex items-center justify-center h-full">

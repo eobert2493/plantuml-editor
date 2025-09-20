@@ -56,7 +56,6 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
 
     const lines = value.split('\n');
     let displayLines: string[] = [];
-    let inTargetSection = false;
 
     if (activeTab === 'setup') {
       // Include @startuml and setup elements
@@ -74,6 +73,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
             trimmed.startsWith('collections') ||
             trimmed.startsWith('queue') ||
             trimmed.startsWith('box') ||
+            trimmed.startsWith('end box') ||
             trimmed.startsWith('skinparam') ||
             trimmed.startsWith('note') && !trimmed.includes('->') ||
             trimmed.startsWith('legend') ||
@@ -89,10 +89,41 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
       displayLines.push('@enduml');
       
     } else if (activeTab === 'sequence') {
-      // Only show sequence interactions (no setup)
-      displayLines.push('@startuml');
-      displayLines.push('');
+      // Extract and preserve setup context (participants, boxes, etc.)
+      const setupLines: string[] = [];
+      let sequenceLines: string[] = [];
       
+      displayLines.push('@startuml');
+      
+      // First pass: collect setup elements
+      for (const line of lines) {
+        const trimmed = line.trim();
+        
+        if (trimmed.startsWith('title') ||
+            trimmed.startsWith('participant') ||
+            trimmed.startsWith('actor') ||
+            trimmed.startsWith('boundary') ||
+            trimmed.startsWith('control') ||
+            trimmed.startsWith('entity') ||
+            trimmed.startsWith('database') ||
+            trimmed.startsWith('collections') ||
+            trimmed.startsWith('queue') ||
+            trimmed.startsWith('box') ||
+            trimmed.startsWith('end box') ||
+            trimmed.startsWith('skinparam') ||
+            trimmed.startsWith('!') ||
+            (trimmed.startsWith('note') && !trimmed.includes('->') && !trimmed.includes('of') && !trimmed.includes('over'))) {
+          setupLines.push(line);
+        }
+      }
+      
+      // Add setup lines first
+      displayLines.push(...setupLines);
+      if (setupLines.length > 0) {
+        displayLines.push(''); // Empty line separator
+      }
+      
+      // Second pass: collect sequence interactions
       for (const line of lines) {
         const trimmed = line.trim();
         
@@ -112,13 +143,14 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
             trimmed.startsWith('group') ||
             trimmed.startsWith('end') ||
             trimmed.startsWith('==') ||
-            (trimmed === '' && displayLines.length > 2)) { // Empty lines only after we've started adding content
+            (trimmed === '' && sequenceLines.length > 0)) { // Empty lines only after we've started adding content
           if (!trimmed.startsWith('@enduml')) {
-            displayLines.push(line);
+            sequenceLines.push(line);
           }
         }
       }
       
+      displayLines.push(...sequenceLines);
       displayLines.push('@enduml');
     }
 
