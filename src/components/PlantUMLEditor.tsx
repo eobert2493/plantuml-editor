@@ -15,6 +15,8 @@ interface PlantUMLEditorProps {
   onRefresh?: () => void;
   activeTab?: 'full' | 'setup' | 'sequence';
   onTabChange?: (tab: 'full' | 'setup' | 'sequence') => void;
+  hasSetupContent?: boolean;
+  hasSequenceContent?: boolean;
 }
 
 interface CodeSection {
@@ -24,7 +26,7 @@ interface CodeSection {
   icon: string;
 }
 
-export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange }: PlantUMLEditorProps) => {
+export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false }: PlantUMLEditorProps) => {
   const [lineCount, setLineCount] = useState(1);
   
   // Define code sections
@@ -47,6 +49,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
     const lines = value.split('\n').length;
     setLineCount(lines);
   }, [value]);
+
 
   // Parse content based on active tab
   const getDisplayContent = useCallback(() => {

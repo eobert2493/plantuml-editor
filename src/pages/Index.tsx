@@ -134,11 +134,25 @@ B -> U: Display Page
               <Button
                 variant={activeEditorTab === 'setup' ? 'secondary' : 'ghost'}
                 size="sm"
+                disabled={!plantUMLCode.split('\n').some(line => {
+                  const trimmed = line.trim();
+                  return trimmed.startsWith('participant') ||
+                         trimmed.startsWith('actor') ||
+                         trimmed.startsWith('boundary') ||
+                         trimmed.startsWith('control') ||
+                         trimmed.startsWith('entity') ||
+                         trimmed.startsWith('database') ||
+                         trimmed.startsWith('collections') ||
+                         trimmed.startsWith('queue') ||
+                         trimmed.startsWith('box') ||
+                         trimmed.startsWith('title') ||
+                         trimmed.startsWith('skinparam');
+                })}
                 onClick={() => {
                   setActiveEditorTab('setup');
                   localStorage.setItem('plantuml-active-tab', JSON.stringify('setup'));
                 }}
-                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
+                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text disabled:opacity-50"
               >
                 <Settings className="w-3 h-3 mr-1" />
                 Setup
@@ -146,11 +160,20 @@ B -> U: Display Page
               <Button
                 variant={activeEditorTab === 'sequence' ? 'secondary' : 'ghost'}
                 size="sm"
+                disabled={!plantUMLCode.split('\n').some(line => {
+                  const trimmed = line.trim();
+                  return trimmed.includes('->') || 
+                         trimmed.includes('<-') || 
+                         trimmed.includes('-->') ||
+                         trimmed.includes('<--') ||
+                         trimmed.includes('..>') ||
+                         trimmed.includes('<..');
+                })}
                 onClick={() => {
                   setActiveEditorTab('sequence');
                   localStorage.setItem('plantuml-active-tab', JSON.stringify('sequence'));
                 }}
-                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
+                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text disabled:opacity-50"
               >
                 <ArrowRight className="w-3 h-3 mr-1" />
                 Sequence
