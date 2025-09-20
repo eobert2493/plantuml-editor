@@ -1,9 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Copy, FileText, Download, Zap } from "lucide-react";
+import CodeMirror from "@uiw/react-codemirror";
+import { plantuml } from "@/lib/plantuml-lang";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
+import { tags } from "@lezer/highlight";
 
 interface PlantUMLEditorProps {
   value: string;
@@ -19,15 +23,70 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
     setLineCount(lines);
   }, [value]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      e.preventDefault();
+  // Create syntax highlighting theme
+  const highlightStyle = HighlightStyle.define([
+    { tag: tags.comment, color: "hsl(var(--editor-comment))" },
+    { tag: tags.keyword, color: "hsl(var(--editor-keyword))" },
+    { tag: tags.string, color: "hsl(var(--editor-string))" },
+    { tag: tags.number, color: "hsl(var(--editor-number))" },
+    { tag: tags.operator, color: "hsl(var(--editor-keyword))" },
+    { tag: tags.punctuation, color: "hsl(var(--editor-text))" },
+    { tag: tags.meta, color: "hsl(var(--editor-string))" },
+  ]);
+
+  // CodeMirror extensions
+  const extensions = [
+    plantuml(),
+    syntaxHighlighting(highlightStyle),
+    EditorView.theme({
+      "&": {
+        fontSize: "14px",
+        fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+      },
+      ".cm-content": {
+        padding: "12px",
+        minHeight: "100%",
+        color: "hsl(var(--editor-text))",
+        caretColor: "hsl(var(--editor-keyword))",
+      },
+      ".cm-editor": {
+        height: "100%",
+      },
+      ".cm-focused": {
+        outline: "none",
+      },
+      ".cm-gutters": {
+        backgroundColor: "hsl(var(--editor-panel))",
+        color: "hsl(var(--editor-comment))",
+        border: "none",
+        borderRight: "1px solid hsl(var(--editor-border))",
+      },
+      ".cm-activeLineGutter": {
+        backgroundColor: "transparent",
+      },
+      ".cm-lineNumbers .cm-gutterElement": {
+        color: "hsl(var(--editor-comment))",
+        fontSize: "12px",
+      },
+    }),
+    EditorView.lineWrapping,
+  ];
+
+  // Handle keyboard shortcuts
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+      event.preventDefault();
       if (onRefresh) {
         onRefresh();
         toast.success("Diagram refreshed!");
       }
     }
   }, [onRefresh]);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   const handleCopy = async () => {
     try {
@@ -93,39 +152,28 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh }: PlantUMLEditorPro
         </div>
       </div>
       
-      <div className="flex-1 relative">
-        <Textarea
+      <div className="flex-1">
+        <CodeMirror
           value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onChange={(val) => onChange(val)}
+          extensions={extensions}
           placeholder="Start typing your PlantUML diagram here..."
-          className="h-full resize-none bg-editor-background border-0 text-editor-text placeholder:text-editor-comment font-mono text-sm focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none pl-14 leading-6"
+          basicSetup={{
+            lineNumbers: true,
+            foldGutter: false,
+            dropCursor: false,
+            allowMultipleSelections: false,
+            indentOnInput: true,
+            autocompletion: true,
+            closeBrackets: true,
+            searchKeymap: true,
+          }}
+          theme="dark"
           style={{
-            minHeight: '100%',
-            padding: '12px 12px 12px 56px',
-            lineHeight: '24px',
+            fontSize: '14px',
+            height: '100%',
           }}
         />
-        
-        {/* Line numbers */}
-        <div className="absolute left-0 top-0 bottom-0 w-12 bg-editor-panel border-r border-editor-border flex flex-col text-xs text-editor-comment font-mono select-none"
-             style={{
-               padding: '12px 8px 12px 4px',
-               lineHeight: '24px',
-             }}>
-          {Array.from({ length: lineCount }, (_, i) => (
-            <div
-              key={i + 1}
-              className="flex items-center justify-end min-h-6"
-              style={{ 
-                height: '24px',
-                lineHeight: '24px'
-              }}
-            >
-              {i + 1}
-            </div>
-          ))}
-        </div>
       </div>
     </Card>
   );
