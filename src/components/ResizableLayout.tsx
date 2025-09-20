@@ -5,9 +5,10 @@ interface ResizableLayoutProps {
   leftPanel: React.ReactNode;
   rightPanel: React.ReactNode;
   className?: string;
+  hideLeftPanel?: boolean;
 }
 
-export const ResizableLayout = ({ leftPanel, rightPanel, className }: ResizableLayoutProps) => {
+export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false }: ResizableLayoutProps) => {
   const [leftWidth, setLeftWidth] = useState(50); // percentage
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -60,29 +61,35 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className }: ResizableL
       className={cn("flex h-full", className)}
     >
       {/* Left Panel */}
-      <div 
-        className="flex-shrink-0 overflow-hidden"
-        style={{ width: `${leftWidth}%` }}
-      >
-        {leftPanel}
-      </div>
+      {!hideLeftPanel && leftPanel && (
+        <div 
+          className="flex-shrink-0 overflow-hidden"
+          style={{ width: `${leftWidth}%` }}
+        >
+          {leftPanel}
+        </div>
+      )}
 
       {/* Resize Handle */}
-      <div
-        className={cn(
-          "w-1 bg-editor-border hover:bg-primary cursor-col-resize flex-shrink-0 transition-colors relative group",
-          isDragging && "bg-primary"
-        )}
-        onMouseDown={handleMouseDown}
-      >
-        {/* Visual indicator on hover */}
-        <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-primary/20 transition-colors" />
-      </div>
+      {!hideLeftPanel && leftPanel && (
+        <div
+          className={cn(
+            "w-1 bg-editor-border hover:bg-primary cursor-col-resize flex-shrink-0 transition-colors relative group",
+            isDragging && "bg-primary"
+          )}
+          onMouseDown={handleMouseDown}
+        >
+          {/* Visual indicator on hover */}
+          <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-primary/20 transition-colors" />
+        </div>
+      )}
 
       {/* Right Panel */}
       <div 
         className="flex-1 overflow-hidden"
-        style={{ width: `${100 - leftWidth}%` }}
+        style={{ 
+          width: hideLeftPanel || !leftPanel ? '100%' : `${100 - leftWidth}%` 
+        }}
       >
         {rightPanel}
       </div>

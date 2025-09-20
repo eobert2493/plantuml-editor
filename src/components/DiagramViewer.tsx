@@ -270,7 +270,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
           {needsRefresh && !isLoading && (
             <div className="flex items-center gap-1 text-xs text-amber-400">
               <Zap className="w-3 h-3" />
-              <span>Press Cmd+Enter to refresh</span>
+              <span>Press Cmd+J to refresh</span>
             </div>
           )}
           {isLoading && (

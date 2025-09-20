@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { PlantUMLEditor } from "@/components/PlantUMLEditor";
 import { DiagramViewer } from "@/components/DiagramViewer";
 import { ExampleTemplates } from "@/components/ExampleTemplates";
@@ -25,6 +25,7 @@ B -> U: Display Page
   const [showTemplates, setShowTemplates] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeEditorTab, setActiveEditorTab] = useState<'full' | 'setup' | 'sequence'>('full');
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
 
   const handleTemplateSelect = (template: string) => {
     setPlantUMLCode(template);
@@ -36,6 +37,19 @@ B -> U: Display Page
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
   };
+
+  // Handle keyboard shortcuts
+  const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
+      event.preventDefault();
+      setShowLeftPanel(prev => !prev);
+    }
+  }, []);
+
+  useEffect(() => {
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   return (
     <div className="h-screen bg-gradient-background flex flex-col">
@@ -94,13 +108,15 @@ B -> U: Display Page
         <div className="flex-1">
           <ResizableLayout
             leftPanel={
-              <PlantUMLEditor
-                value={plantUMLCode}
-                onChange={setPlantUMLCode}
-                onRefresh={handleRefresh}
-                activeTab={activeEditorTab}
-                onTabChange={setActiveEditorTab}
-              />
+              showLeftPanel ? (
+                <PlantUMLEditor
+                  value={plantUMLCode}
+                  onChange={setPlantUMLCode}
+                  onRefresh={handleRefresh}
+                  activeTab={activeEditorTab}
+                  onTabChange={setActiveEditorTab}
+                />
+              ) : null
             }
             rightPanel={
               <DiagramViewer 
@@ -109,6 +125,7 @@ B -> U: Display Page
                 onRefresh={handleRefresh}
               />
             }
+            hideLeftPanel={!showLeftPanel}
           />
         </div>
       </div>
@@ -155,7 +172,7 @@ B -> U: Display Page
           <div className="flex items-center gap-4">
             <span>PlantUML Server Online</span>
             <span>•</span>
-            <span>Press Cmd+Enter to refresh</span>
+            <span>Press Cmd+J to refresh • Cmd+B to toggle editor</span>
           </div>
         </div>
       </footer>

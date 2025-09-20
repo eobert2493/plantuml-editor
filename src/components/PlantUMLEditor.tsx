@@ -211,7 +211,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+    if ((event.metaKey || event.ctrlKey) && event.key === 'j') {
       event.preventDefault();
       if (onRefresh) {
         onRefresh();
@@ -264,7 +264,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
               size="sm"
               onClick={onRefresh}
               className="h-8 px-2 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-              title="Refresh diagram (Cmd+Enter)"
+              title="Refresh diagram (Cmd+J)"
             >
               <Zap className="w-3 h-3 mr-1" />
               <span className="text-xs">Refresh</span>
