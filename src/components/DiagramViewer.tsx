@@ -13,10 +13,12 @@ export const DiagramViewer = ({ plantUMLCode }: DiagramViewerProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
 
-  // Encode PlantUML code for URL
+  // Encode PlantUML code for URL using the correct format
   const encodeUML = (uml: string): string => {
+    // Use deflate compression compatible encoding
     const encoded = btoa(unescape(encodeURIComponent(uml)));
-    return encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    // Add the ~1 header for newer PlantUML server format
+    return `~1${encoded.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')}`;
   };
 
   const generateDiagram = async () => {
