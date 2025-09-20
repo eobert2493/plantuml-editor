@@ -53,47 +53,6 @@ B -> U: Display Page
 
   return (
     <div className="h-screen bg-gradient-background flex flex-col">
-      {/* Header */}
-      <header className="bg-editor-panel border-b border-editor-border">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <FileCode2 className="w-6 h-6 text-primary" />
-              <h1 className="text-lg font-bold text-editor-text">PlantUML Editor</h1>
-            </div>
-            <div className="text-xs text-editor-comment">
-              Real-time diagram editor & viewer
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowTemplates(!showTemplates)}
-              className="text-editor-comment hover:text-editor-text"
-            >
-              <HelpCircle className="w-4 h-4 mr-2" />
-              Templates
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              asChild
-              className="text-editor-comment hover:text-editor-text"
-            >
-              <a
-                href="https://plantuml.com/guide"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Github className="w-4 h-4 mr-2" />
-                Guide
-              </a>
-            </Button>
-          </div>
-        </div>
-      </header>
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
