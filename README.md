@@ -1,16 +1,24 @@
 ## Full Screen PlantUML
 
-A minimal, fast PlantUML editor and previewer with a full‑screen, split layout. Write PlantUML on the left, see an SVG preview on the right. Includes section navigation with `== Section ==` markers and handy export actions.
+Design, split, and export PlantUML diagrams faster. This app is a focused, full‑screen PlantUML workspace with a Monaco editor, intelligent sectioning for large sequence diagrams, and one‑click exports (including stacked PDF). It’s built for engineers and architects who want an instant preview, smart navigation, and keyboard‑driven workflow.
+
+### Why use this
+
+- **Move faster with big diagrams**: Split long sequence flows into labeled sections and jump between them or view them all stacked.
+- **Stay in flow**: Monaco editor with PlantUML IntelliSense, no line wrapping, rich editor options, and keyboard shortcuts.
+- **Share anywhere**: Export single or all sections as SVG/PNG, or export a stacked PDF for docs and reviews.
+- **Flexible layout**: Toggle between left/right or top/bottom panes to match your screen or demo style.
+- **Local, safe drafts**: Files are auto‑saved in your browser (IndexedDB). Rename inline, duplicate, export, and manage via Command+K.
 
 ### Features
 
-- **Full‑screen workspace**: Editor and preview in a clean, distraction‑free layout.
-- **Clean editor**: Single editor view with no extra tab switching.
-- **Section navigation**: Use PlantUML headers like `== My Section ==` to split large sequence diagrams.
-- **Multiple preview modes**: Switch between **Full**, **Sections**, and **Stacked** views.
-- **Templates**: Quickly start with common diagram types.
-- **One‑key refresh**: Regenerate the diagram without leaving the keyboard.
-- **Export & copy**: Copy code, export `.puml`, and download the rendered `.svg`.
+- **Monaco editor** with PlantUML completions, bracket guides, and performance‑oriented settings.
+- **Section navigation** using `== Section ==` markers; one‑by‑one view and stacked view.
+- **Download menu**: current diagram (SVG/PNG), all sections (SVG/PNG), stacked (SVG/PDF).
+- **Command+K palette**: search/switch files, create and delete files with confirmation.
+- **Inline rename**: double‑click the file name in the preview header.
+- **Theme controls**: independent page theme (Light/Dark) and editor theme (Dracula, Monokai, Solarized, GitHub, VS, etc.).
+- **Layout toggle**: Left/Right or Top/Bottom split; editor pinned to bottom in vertical mode.
 
 ### Quick start
 
@@ -25,26 +33,31 @@ Open `http://localhost:5173`.
 
 ### Usage
 
-- **Write PlantUML** in the editor between `@startuml` and `@enduml`.
-- **Sections**: Add headers like `== Login ==`, `== Checkout ==` to split big sequences. The preview provides:
-  - **Sections** mode: Navigate one section at a time.
-  - **Stacked** mode: See all sections vertically.
-- **Actions**:
-  - Editor toolbar: Copy, Export `.puml`.
-  - Preview toolbar: Refresh, Download `.svg`, toggle view modes.
+- **Write** PlantUML between `@startuml` and `@enduml`.
+- **Split** complex flows with `== My Section ==` and switch views:
+  - Sections (one at a time)
+  - Stacked (all sections)
+  - Full (entire diagram)
+- **Export** via the download menu:
+  - Current diagram as SVG/PNG
+  - All sections as SVG/PNG (zero‑padded file names for sorting)
+  - Stacked view as SVG or **PDF**
+- **Manage files** with Cmd/Ctrl+K: search, create, delete (with confirm). Files auto‑save.
+- **Rename** inline: double‑click the file name in the preview header.
+- **Customize** themes in the footer: page theme and editor theme are independent.
+- **Switch layout** in the footer: Left/Right or Top/Bottom.
 
 ### Keyboard shortcuts
 
+- **Cmd+K / Ctrl+K**: File palette (search, create, delete)
 - **Cmd+J / Ctrl+J**: Refresh diagram
 - **Cmd+B / Ctrl+B**: Toggle editor panel visibility
 
 ### How rendering works
 
-Diagrams are encoded in the browser using `plantuml-encoder` and rendered through the public PlantUML server as SVG:
+Diagrams are encoded in the browser using `plantuml-encoder` and rendered via the public PlantUML server (`/svg` or `/png`). The stacked PDF export embeds section PNGs using `pdf-lib`.
 
-`https://www.plantuml.com/plantuml/svg/{encoded}`
-
-Note: Your diagram text is sent to the PlantUML server to render. If you require full privacy or offline rendering, point the code to a self‑hosted PlantUML server.
+Note: Diagram text is sent to the PlantUML server to render. For privacy/offline needs, point requests to your own PlantUML server.
 
 ### Scripts
 
@@ -56,14 +69,15 @@ Note: Your diagram text is sent to the PlantUML server to render. If you require
 
 ### Tech stack
 
-- Vite, React, TypeScript
-- Tailwind CSS, shadcn‑ui (Radix UI)
-- CodeMirror 6 with PlantUML syntax highlighting
+- Vite, React, TypeScript, Tailwind CSS, shadcn‑ui (Radix UI)
+- Monaco Editor (`@monaco-editor/react`)
 - `plantuml-encoder` for URL encoding
+- `pdf-lib` for stacked PDF export
 
 ### Tips
 
-- The app remembers whether the editor panel is visible via `localStorage`.
+- Files, layout, and themes persist in `localStorage`/IndexedDB.
+- In vertical layout, editor is pinned to the bottom.
 
 ### License
 
