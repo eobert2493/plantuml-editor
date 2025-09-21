@@ -6,13 +6,15 @@ interface ResizableLayoutProps {
   rightPanel: React.ReactNode;
   className?: string;
   hideLeftPanel?: boolean;
+  orientation?: 'horizontal' | 'vertical'; // horizontal: left/right, vertical: top/bottom
 }
 
-export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false }: ResizableLayoutProps) => {
-  // Track left panel width in pixels to avoid layout shifts on content changes
-  const [leftWidthPx, setLeftWidthPx] = useState<number>(() => {
+export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false, orientation = 'horizontal' }: ResizableLayoutProps) => {
+  // Track primary pane size in pixels to avoid layout shifts on content changes
+  const [primarySizePx, setPrimarySizePx] = useState<number>(() => {
     try {
-      const savedPx = localStorage.getItem('plantuml-left-width-px');
+      const key = orientation === 'horizontal' ? 'plantuml-left-width-px' : 'plantuml-top-height-px';
+      const savedPx = localStorage.getItem(key);
       if (savedPx) return JSON.parse(savedPx);
       return -1; // will be initialized after mount
     } catch {
@@ -30,17 +32,23 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging || !containerRef.current) return;
 
-    const containerRect = containerRef.current.getBoundingClientRect();
-    const proposedPx = e.clientX - containerRect.left;
-    // Constrain between 20% and 80% of container width
-    const minPx = containerRect.width * 0.2;
-    const maxPx = containerRect.width * 0.8;
-    const clampedPx = Math.max(minPx, Math.min(maxPx, proposedPx));
-    setLeftWidthPx(clampedPx);
-    try {
-      localStorage.setItem('plantuml-left-width-px', JSON.stringify(clampedPx));
-    } catch {}
-  }, [isDragging]);
+    const rect = containerRef.current.getBoundingClientRect();
+    if (orientation === 'horizontal') {
+      const proposed = e.clientX - rect.left;
+      const min = rect.width * 0.2;
+      const max = rect.width * 0.8;
+      const clamped = Math.max(min, Math.min(max, proposed));
+      setPrimarySizePx(clamped);
+      try { localStorage.setItem('plantuml-left-width-px', JSON.stringify(clamped)); } catch {}
+    } else {
+      const proposed = e.clientY - rect.top;
+      const min = rect.height * 0.2;
+      const max = rect.height * 0.8;
+      const clamped = Math.max(min, Math.min(max, proposed));
+      setPrimarySizePx(clamped);
+      try { localStorage.setItem('plantuml-top-height-px', JSON.stringify(clamped)); } catch {}
+    }
+  }, [isDragging, orientation]);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -68,38 +76,42 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  // Initialize pixel width on first mount when container size is known
+  // Initialize pixel size on first mount when container size is known
   useEffect(() => {
-    if (leftWidthPx >= 0) return; // already initialized
+    if (primarySizePx >= 0) return; // already initialized
     if (!containerRef.current) return;
-    const containerRect = containerRef.current.getBoundingClientRect();
-    // Try to migrate from old percent setting if present
-    let initialPx = containerRect.width * 0.5;
+    const rect = containerRef.current.getBoundingClientRect();
+    let initialPx = (orientation === 'horizontal' ? rect.width : rect.height) * 0.5;
+    // Migrate from old percent if present
     try {
       const savedPercent = localStorage.getItem('plantuml-left-width');
-      if (savedPercent) {
-        initialPx = (JSON.parse(savedPercent) as number) / 100 * containerRect.width;
+      if (savedPercent && orientation === 'horizontal') {
+        initialPx = (JSON.parse(savedPercent) as number) / 100 * rect.width;
       }
     } catch {}
-    setLeftWidthPx(initialPx);
+    setPrimarySizePx(initialPx);
     try {
-      localStorage.setItem('plantuml-left-width-px', JSON.stringify(initialPx));
+      const key = orientation === 'horizontal' ? 'plantuml-left-width-px' : 'plantuml-top-height-px';
+      localStorage.setItem(key, JSON.stringify(initialPx));
     } catch {}
-  }, [leftWidthPx]);
+  }, [primarySizePx, orientation]);
 
   return (
     <div 
       ref={containerRef}
-      className={cn("flex h-full w-full overflow-hidden", className)}
+      className={cn(orientation === 'horizontal' ? 'flex' : 'flex flex-col', "h-full w-full overflow-hidden", className)}
     >
       {/* Left Panel */}
       {!hideLeftPanel && leftPanel && (
         <div 
-          className="flex-shrink-0 overflow-hidden min-w-0"
+          className={cn("flex-shrink-0 overflow-hidden min-w-0", orientation === 'vertical' && 'min-h-0')}
           style={{ 
-            width: leftWidthPx >= 0 ? `${leftWidthPx}px` : undefined,
-            minWidth: leftWidthPx >= 0 ? `${leftWidthPx}px` : undefined,
-            maxWidth: leftWidthPx >= 0 ? `${leftWidthPx}px` : undefined
+            width: orientation === 'horizontal' && primarySizePx >= 0 ? `${primarySizePx}px` : undefined,
+            minWidth: orientation === 'horizontal' && primarySizePx >= 0 ? `${primarySizePx}px` : undefined,
+            maxWidth: orientation === 'horizontal' && primarySizePx >= 0 ? `${primarySizePx}px` : undefined,
+            height: orientation === 'vertical' && primarySizePx >= 0 ? `${primarySizePx}px` : undefined,
+            minHeight: orientation === 'vertical' && primarySizePx >= 0 ? `${primarySizePx}px` : undefined,
+            maxHeight: orientation === 'vertical' && primarySizePx >= 0 ? `${primarySizePx}px` : undefined,
           }}
         >
           {leftPanel}
@@ -110,19 +122,24 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
       {!hideLeftPanel && leftPanel && (
         <div
           className={cn(
-            "w-1 bg-editor-border hover:bg-primary cursor-col-resize flex-shrink-0 transition-colors relative group",
+            orientation === 'horizontal'
+              ? "w-1 bg-editor-border hover:bg-primary cursor-col-resize flex-shrink-0 transition-colors relative group"
+              : "h-1 bg-editor-border hover:bg-primary cursor-row-resize flex-shrink-0 transition-colors relative group",
             isDragging && "bg-primary"
           )}
           onMouseDown={handleMouseDown}
         >
           {/* Visual indicator on hover */}
-          <div className="absolute inset-y-0 -left-1 -right-1 group-hover:bg-primary/20 transition-colors" />
+          <div className={cn(
+            orientation === 'horizontal' ? "absolute inset-y-0 -left-1 -right-1" : "absolute inset-x-0 -top-1 -bottom-1",
+            "group-hover:bg-primary/20 transition-colors"
+          )} />
         </div>
       )}
 
       {/* Right Panel */}
       <div 
-        className={cn("overflow-hidden min-w-0", (hideLeftPanel || !leftPanel) ? "w-full" : "flex-1")}
+        className={cn("overflow-hidden", orientation === 'horizontal' ? 'min-w-0' : 'min-h-0', (hideLeftPanel || !leftPanel) ? "w-full h-full" : "flex-1")}
         style={{ 
           flexShrink: 1,
           flexGrow: (hideLeftPanel || !leftPanel) ? 0 : 1

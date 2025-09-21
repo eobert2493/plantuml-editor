@@ -2,12 +2,10 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Copy, FileText, Download, PanelLeft } from "lucide-react";
-import CodeMirror from "@uiw/react-codemirror";
-import { plantuml } from "@/lib/plantuml-lang";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { EditorView } from "@codemirror/view";
-import { tags } from "@lezer/highlight";
+import { Copy, FileText, Download } from "lucide-react";
+import Editor, { OnMount } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
+import { plantuml, plantumlCompletionSource } from "@/lib/plantuml-lang";
 
 interface PlantUMLEditorProps {
   value: string;
@@ -17,8 +15,8 @@ interface PlantUMLEditorProps {
   onTabChange?: (tab: 'full' | 'setup' | 'sequence') => void;
   hasSetupContent?: boolean;
   hasSequenceContent?: boolean;
-  onToggleSidebar?: () => void;
-  filesSidebarVisible?: boolean;
+  editorTheme?: 'vs-dark' | 'vs-light' | 'hc-black' | 'plantuml-dark' | 'dracula' | 'monokai' | 'solarized-dark' | 'solarized-light' | 'github-dark' | 'github-light';
+  editorOptions?: Partial<monaco.editor.IStandaloneEditorConstructionOptions>;
 }
 
 interface CodeSection {
@@ -28,7 +26,7 @@ interface CodeSection {
   icon: string;
 }
 
-export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false, onToggleSidebar, filesSidebarVisible = true }: PlantUMLEditorProps) => {
+export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false, editorTheme = 'plantuml-dark', editorOptions = {} }: PlantUMLEditorProps) => {
   
   // Define code sections
   const codeSections: Record<string, CodeSection> = {
@@ -158,57 +156,163 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
     return displayLines.join('\n');
   }, [value, activeTab]);
 
-  // Create syntax highlighting theme
-  const highlightStyle = HighlightStyle.define([
-    { tag: tags.comment, color: "hsl(var(--editor-comment))" },
-    { tag: tags.keyword, color: "hsl(var(--editor-keyword))" },
-    { tag: tags.string, color: "hsl(var(--editor-string))" },
-    { tag: tags.number, color: "hsl(var(--editor-number))" },
-    { tag: tags.operator, color: "hsl(var(--editor-keyword))" },
-    { tag: tags.punctuation, color: "hsl(var(--editor-text))" },
-    { tag: tags.meta, color: "hsl(var(--editor-string))" },
-  ]);
+  const handleEditorMount: OnMount = (editor, monacoInstance) => {
+    // Basic PlantUML language registration for Monaco
+    const languageId = 'plantuml';
+    monacoInstance.languages.register({ id: languageId });
+    monacoInstance.languages.setMonarchTokensProvider(languageId, {
+      tokenizer: {
+        root: [
+          [/^'.*$/, 'comment'],
+          [/^@(?:start|end)\w+/, 'keyword'],
+          [/(title|participant|actor|boundary|control|entity|database|collections|queue|note|box|end box|legend|skinparam|autonumber|alt|else|opt|loop|par|break|critical|activate|deactivate|create|destroy|return)\b/, 'keyword'],
+          [/"([^"\\]|\\.)*"/, 'string'],
+          [/#?[0-9a-fA-F]{6}\b/, 'number'],
+          [/(-+>|<-+|\.\.+>|<\.\.|\|+>|<\|+|o+>|<o+|\*+>|<\*+|\\+>|<\\+|\/+>|<\/+)/, 'operator'],
+        ],
+      },
+    });
 
-  // CodeMirror extensions
-  const extensions = [
-    plantuml(),
-    syntaxHighlighting(highlightStyle),
-    EditorView.theme({
-      "&": {
-        fontSize: "14px",
-        fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-        height: "100%",
+    // Completions: keywords + simple snippets based on our CM source
+    const keywordSuggestions = [
+      '@startuml', '@enduml', 'title', 'participant', 'actor', 'boundary', 'control', 'entity', 'database',
+      'collections', 'queue', 'note', 'box', 'end box', 'legend', 'skinparam', 'autonumber', 'alt', 'else', 'opt', 'loop', 'par', 'break', 'return'
+    ].map(label => ({
+      label,
+      kind: monacoInstance.languages.CompletionItemKind.Keyword,
+      insertText: label,
+    }));
+
+    const snippetSuggestions = [
+      {
+        label: '@startuml…@enduml',
+        kind: monacoInstance.languages.CompletionItemKind.Snippet,
+        insertText: '@startuml\n$1\n@enduml',
+        insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
       },
-      ".cm-content": {
-        padding: "12px",
-        color: "hsl(var(--editor-text))",
-        caretColor: "hsl(var(--editor-keyword))",
+      {
+        label: 'participant',
+        kind: monacoInstance.languages.CompletionItemKind.Snippet,
+        insertText: 'participant "${1:Name}" as ${2:Alias}',
+        insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
       },
-      ".cm-editor": {
-        height: "100%",
+      {
+        label: 'box',
+        kind: monacoInstance.languages.CompletionItemKind.Snippet,
+        insertText: 'box ${1:Name}\n  $2\nend box',
+        insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
       },
-      ".cm-scroller": {
-        fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-        height: "100%",
+      {
+        label: 'alt/else/end',
+        kind: monacoInstance.languages.CompletionItemKind.Snippet,
+        insertText: 'alt ${1:Condition}\n  $2\nelse ${3:Otherwise}\n  $4\nend',
+        insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
       },
-      ".cm-focused": {
-        outline: "none",
+    ];
+
+    monacoInstance.languages.registerCompletionItemProvider(languageId, {
+      provideCompletionItems: () => ({
+        suggestions: [...keywordSuggestions, ...snippetSuggestions],
+      }),
+    });
+
+    // Themes
+    monacoInstance.editor.defineTheme('plantuml-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '6b7280' },
+        { token: 'keyword', foreground: '93c5fd' },
+        { token: 'string', foreground: '86efac' },
+        { token: 'number', foreground: 'fde68a' },
+        { token: 'operator', foreground: 'a5b4fc' },
+      ],
+      colors: {
+        'editor.background': '#0b0f14',
+        'editorLineNumber.foreground': '#4b5563',
+        'editorLineNumber.activeForeground': '#93c5fd',
+        'editorCursor.foreground': '#93c5fd',
+        'editorIndentGuide.background': '#1f2937',
       },
-      ".cm-gutters": {
-        backgroundColor: "hsl(var(--editor-panel))",
-        color: "hsl(var(--editor-comment))",
-        border: "none",
-        borderRight: "1px solid hsl(var(--editor-border))",
-      },
-      ".cm-activeLineGutter": {
-        backgroundColor: "transparent",
-      },
-      ".cm-lineNumbers .cm-gutterElement": {
-        color: "hsl(var(--editor-comment))",
-        fontSize: "12px",
-      },
-    }),
-  ];
+    });
+    monacoInstance.editor.defineTheme('dracula', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '6272a4' },
+        { token: 'keyword', foreground: 'ff79c6' },
+        { token: 'string', foreground: 'f1fa8c' },
+        { token: 'number', foreground: 'bd93f9' },
+        { token: 'operator', foreground: '8be9fd' },
+      ],
+      colors: { 'editor.background': '#282a36' },
+    });
+    monacoInstance.editor.defineTheme('monokai', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '75715e' },
+        { token: 'keyword', foreground: 'f92672' },
+        { token: 'string', foreground: 'e6db74' },
+        { token: 'number', foreground: 'ae81ff' },
+        { token: 'operator', foreground: '66d9ef' },
+      ],
+      colors: { 'editor.background': '#272822' },
+    });
+    monacoInstance.editor.defineTheme('solarized-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '586e75' },
+        { token: 'keyword', foreground: '859900' },
+        { token: 'string', foreground: '2aa198' },
+        { token: 'number', foreground: 'b58900' },
+        { token: 'operator', foreground: '268bd2' },
+      ],
+      colors: { 'editor.background': '#002b36' },
+    });
+    monacoInstance.editor.defineTheme('solarized-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '93a1a1' },
+        { token: 'keyword', foreground: '859900' },
+        { token: 'string', foreground: '2aa198' },
+        { token: 'number', foreground: 'b58900' },
+        { token: 'operator', foreground: '268bd2' },
+      ],
+      colors: { 'editor.background': '#fdf6e3' },
+    });
+    monacoInstance.editor.defineTheme('github-dark', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '8b949e' },
+        { token: 'keyword', foreground: 'ff7b72' },
+        { token: 'string', foreground: 'a5d6ff' },
+        { token: 'number', foreground: 'ffa657' },
+        { token: 'operator', foreground: '79c0ff' },
+      ],
+      colors: { 'editor.background': '#0d1117' },
+    });
+    monacoInstance.editor.defineTheme('github-light', {
+      base: 'vs',
+      inherit: true,
+      rules: [
+        { token: 'comment', foreground: '6e7781' },
+        { token: 'keyword', foreground: 'cf222e' },
+        { token: 'string', foreground: '0a3069' },
+        { token: 'number', foreground: '953800' },
+        { token: 'operator', foreground: '0550ae' },
+      ],
+      colors: { 'editor.background': '#ffffff' },
+    });
+    monacoInstance.editor.setTheme(editorTheme || 'plantuml-dark');
+
+    // Set language on the model
+    const model = editor.getModel();
+    if (model) monacoInstance.editor.setModelLanguage(model, languageId);
+  };
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -252,17 +356,6 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
     <Card className="h-full bg-editor-panel border-editor-border flex flex-col">
       <div className="flex items-center justify-between p-3 border-b border-editor-border">
         <div className="flex items-center gap-2">
-          {onToggleSidebar && (
-            <Button
-              variant={filesSidebarVisible ? 'secondary' : 'ghost'}
-              size="icon"
-              onClick={onToggleSidebar}
-              className="h-7 w-7 text-editor-comment hover:text-editor-text"
-              title={filesSidebarVisible ? 'Hide files sidebar' : 'Show files sidebar'}
-            >
-              <PanelLeft className="w-4 h-4" />
-            </Button>
-          )}
           <FileText className="w-4 h-4 text-editor-keyword" />
           <h3 className="text-sm font-medium text-editor-text">PlantUML Editor</h3>
         </div>
@@ -287,34 +380,34 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
       </div>
       
       <div className="flex-1 overflow-hidden">
-        <CodeMirror
+        <Editor
           value={activeTab === 'full' ? value : getDisplayContent()}
           onChange={(val) => {
-            if (activeTab === 'full') {
+            if (activeTab === 'full' && typeof val === 'string') {
               onChange(val);
             }
-            // For filtered views, we'll just show read-only content
           }}
-          extensions={extensions}
-          placeholder="Start typing your PlantUML diagram here..."
-          editable={activeTab === 'full'}
-          basicSetup={{
-            lineNumbers: true,
-            foldGutter: false,
-            dropCursor: false,
-            allowMultipleSelections: false,
-            indentOnInput: true,
-            autocompletion: true,
-            closeBrackets: true,
-            searchKeymap: true,
+          beforeMount={(monacoInstance) => {
+            // Provide monaco globally for worker config if needed
+            (window as any).MonacoEnvironment = { getWorkerUrl: () => './editor.worker.js' };
           }}
-          theme="dark"
+          onMount={handleEditorMount}
+          language="plantuml"
+          theme={editorTheme}
+          options={{
+            fontSize: 14,
+            fontFamily: "ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+            minimap: { enabled: false },
+            scrollBeyondLastLine: false,
+            wordWrap: 'off',
+            lineNumbers: 'on',
+            readOnly: activeTab !== 'full',
+            automaticLayout: true,
+            ...editorOptions,
+            // Ensure readOnly follows activeTab even if overridden
+            readOnly: activeTab !== 'full',
+          }}
           height="100%"
-          style={{
-            fontSize: '14px',
-            height: '100%',
-            overflow: 'auto',
-          }}
         />
       </div>
     </Card>

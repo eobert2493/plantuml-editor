@@ -104,7 +104,32 @@ export async function getFile(id: string): Promise<FileRecord | null> {
 export async function createFile(name: string, content: string): Promise<FileRecord> {
   const now = Date.now();
   const id = (globalThis.crypto && 'randomUUID' in globalThis.crypto) ? (globalThis.crypto as any).randomUUID() : `${now}-${Math.random().toString(36).slice(2)}`;
-  const meta: FileMetadata = { id, name, createdAt: now, updatedAt: now, size: content.length };
+  // Ensure unique name by appending increment if duplicates exist
+  const db = await openDb();
+  const txCheck = db.transaction([STORE_META], 'readonly');
+  const existingNames: string[] = await new Promise((resolve, reject) => {
+    const names: string[] = [];
+    const req = txCheck.objectStore(STORE_META).openCursor();
+    req.onsuccess = () => {
+      const cursor = req.result as IDBCursorWithValue | null;
+      if (cursor) {
+        names.push((cursor.value as FileMetadata).name);
+        cursor.continue();
+      } else {
+        resolve(names);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+  let uniqueName = name;
+  if (existingNames.includes(uniqueName)) {
+    const base = name.replace(/(\.puml)$/i, '');
+    const ext = name.endsWith('.puml') ? '.puml' : '';
+    let i = 2;
+    while (existingNames.includes(`${base} (${i})${ext}`)) i++;
+    uniqueName = `${base} (${i})${ext}`;
+  }
+  const meta: FileMetadata = { id, name: uniqueName, createdAt: now, updatedAt: now, size: content.length };
   await withStores('readwrite', [STORE_META, STORE_BODY], async (tx) => {
     await requestAsPromise(tx.objectStore(STORE_META).add(meta));
     await requestAsPromise(tx.objectStore(STORE_BODY).add({ id, content }));
@@ -131,7 +156,7 @@ export async function renameFile(id: string, name: string): Promise<void> {
     const metaStore = tx.objectStore(STORE_META);
     const existing = await requestAsPromise(metaStore.get(id)) as FileMetadata | undefined;
     if (!existing) return;
-    const updated: FileMetadata = { ...existing, name };
+    const updated: FileMetadata = { ...existing, name, updatedAt: Date.now() };
     await requestAsPromise(metaStore.put(updated));
     return Promise.resolve();
   });

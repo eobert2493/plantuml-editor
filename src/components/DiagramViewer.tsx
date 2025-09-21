@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { RefreshCw, Download, Maximize2, Eye, Zap, ChevronLeft, ChevronRight, Grid3X3, Layers } from "lucide-react";
+import { PDFDocument, rgb } from "pdf-lib";
 import * as plantumlEncoder from "plantuml-encoder";
 
 interface DiagramViewerProps {
@@ -10,9 +12,11 @@ interface DiagramViewerProps {
   onRefresh?: () => void;
   editorTab?: 'full' | 'setup' | 'sequence';
   refreshTrigger?: number;
+  fileName?: string | null;
+  onRenameFile?: (newName: string) => Promise<void> | void;
 }
 
-export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: DiagramViewerProps) => {
+export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileName, onRenameFile }: DiagramViewerProps) => {
   const [diagramUrl, setDiagramUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -28,6 +32,17 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
       return 'full';
     }
   });
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameBase, setRenameBase] = useState<string>("");
+  const [renameExt, setRenameExt] = useState<string>(".puml");
+  const renameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isRenaming && renameInputRef.current) {
+      renameInputRef.current.focus();
+      renameInputRef.current.select();
+    }
+  }, [isRenaming]);
 
   // Parse sections from PlantUML code
   const parseSections = useCallback((code: string) => {
@@ -48,7 +63,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
       return [];
     }
 
-    // Extract participant declarations and initial setup
+    // Extract declarations and setup from entire document (not just before first section)
     const setupLines: string[] = [];
     let foundStart = false;
     
@@ -63,10 +78,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
       
       if (!foundStart) continue;
       
-      // Stop at first section marker
-      if (line.match(/^==\s*.+?\s*==/)) break;
-      
-      // Include participant declarations, titles, and other setup
+      // Include participant declarations, boxes, titles, and other setup across the whole doc
       if (line.startsWith('participant') || 
           line.startsWith('actor') || 
           line.startsWith('boundary') || 
@@ -77,6 +89,10 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
           line.startsWith('queue') || 
           line.startsWith('title') || 
           line.startsWith('skinparam') || 
+          line.startsWith('legend') ||
+          line.startsWith('box') ||
+          line.startsWith('end box') ||
+          (line.startsWith('note') && !line.includes('->') && !line.includes(' of ') && !line.includes(' over ')) ||
           line.startsWith('!') || 
           line === '' || 
           line.startsWith("'")) {
@@ -219,26 +235,160 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshTrigger]);
 
-  const handleDownload = async () => {
-    if (!diagramUrl) {
-      toast.error("No diagram to download");
+  const downloadBlob = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const sanitizeFileName = (name: string) => {
+    return name
+      .replace(/[\\/:*?"<>|]/g, "_")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  const handleDownloadCurrent = async (format: 'svg' | 'png') => {
+    try {
+      let url = '';
+      let filename = '';
+      if (sections.length > 0 && viewMode === 'sections') {
+        const current = sections[currentSection];
+        const encoded = plantumlEncoder.encode(current.code);
+        url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+        filename = `${sanitizeFileName(current.name || 'Section')}.${format}`;
+      } else {
+        const encoded = plantumlEncoder.encode(plantUMLCode);
+        url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+        filename = `diagram.${format}`;
+      }
+      const res = await fetch(url);
+      const blob = await res.blob();
+      downloadBlob(blob, filename);
+      toast.success(`Downloaded ${filename}`);
+    } catch {
+      toast.error('Failed to download');
+    }
+  };
+
+  const handleDownloadAllSections = async (format: 'svg' | 'png') => {
+    if (sections.length === 0) {
+      toast.error("No sections to download");
       return;
     }
-
+    const padWidth = Math.max(2, String(sections.length).length);
     try {
-      const response = await fetch(diagramUrl);
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'diagram.svg';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast.success("Diagram downloaded!");
+      for (let i = 0; i < sections.length; i++) {
+        const section = sections[i];
+        const encoded = plantumlEncoder.encode(section.code);
+        const url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const step = String(i + 1).padStart(padWidth, '0');
+        const base = sanitizeFileName(section.name || `Section ${i + 1}`);
+        downloadBlob(blob, `${step} - ${base}.${format}`);
+      }
+      toast.success(`Downloaded all section ${format.toUpperCase()}s`);
     } catch (err) {
-      toast.error("Failed to download diagram");
+      toast.error("Failed to download all sections");
+    }
+  };
+
+  const getSvgSize = (svgText: string): { width: number; height: number } => {
+    const widthMatch = svgText.match(/width="(\d+(?:\.\d+)?)px"/);
+    const heightMatch = svgText.match(/height="(\d+(?:\.\d+)?)px"/);
+    const viewBoxMatch = svgText.match(/viewBox="[\d\.]+ [\d\.]+ ([\d\.]+) ([\d\.]+)"/);
+    let width = widthMatch ? parseFloat(widthMatch[1]) : (viewBoxMatch ? parseFloat(viewBoxMatch[1]) : 0);
+    let height = heightMatch ? parseFloat(heightMatch[1]) : (viewBoxMatch ? parseFloat(viewBoxMatch[2]) : 0);
+    if (!width || !height) {
+      width = 800;
+      height = 600;
+    }
+    return { width, height };
+  };
+
+  const handleDownloadStackedSvg = async () => {
+    if (sections.length === 0) {
+      toast.error('No sections to download');
+      return;
+    }
+    try {
+      // Fetch all SVG texts
+      const texts: Array<{ name: string; svg: string; size: { width: number; height: number } }> = [];
+      for (const section of sections) {
+        const encoded = plantumlEncoder.encode(section.code);
+        const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
+        const res = await fetch(url);
+        const svgText = await res.text();
+        const size = getSvgSize(svgText);
+        texts.push({ name: section.name, svg: svgText, size });
+      }
+      const totalHeight = texts.reduce((sum, t) => sum + t.size.height, 0);
+      const maxWidth = texts.reduce((max, t) => Math.max(max, t.size.width), 0);
+      let y = 0;
+      const padWidth = Math.max(2, String(texts.length).length);
+      const images = texts.map((t, idx) => {
+        const base64 = btoa(unescape(encodeURIComponent(t.svg)));
+        const fragment = `<image href="data:image/svg+xml;base64,${base64}" x="0" y="${y}" width="${t.size.width}" height="${t.size.height}" />`;
+        y += t.size.height;
+        return fragment;
+      }).join('\n');
+      const combined = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${maxWidth}" height="${totalHeight}">\n${images}\n</svg>`;
+      const blob = new Blob([combined], { type: 'image/svg+xml' });
+      downloadBlob(blob, 'stacked.svg');
+      toast.success('Downloaded stacked view');
+    } catch {
+      toast.error('Failed to download stacked view');
+    }
+  };
+
+  const handleDownloadStackedPdf = async () => {
+    if (sections.length === 0) {
+      toast.error('No sections to download');
+      return;
+    }
+    try {
+      // Fetch PNGs for each section for wide PDF compatibility
+      const images: Array<{ png: Uint8Array; width: number; height: number; name: string }> = [];
+      for (const section of sections) {
+        const encoded = plantumlEncoder.encode(section.code);
+        const url = `https://www.plantuml.com/plantuml/png/${encoded}`;
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const arrayBuf = await blob.arrayBuffer();
+        // We don't know the dimensions from the PNG headers directly here; pdf-lib will scale to page size
+        images.push({ png: new Uint8Array(arrayBuf), width: 0, height: 0, name: section.name });
+      }
+
+      const pdf = await PDFDocument.create();
+      for (const img of images) {
+        const page = pdf.addPage();
+        const pngImage = await pdf.embedPng(img.png);
+        const { width, height } = pngImage.scale(1);
+        const pageWidth = page.getWidth();
+        const pageHeight = page.getHeight();
+        // Fit image within page while preserving aspect ratio with margins
+        const maxWidth = pageWidth - 40;
+        const maxHeight = pageHeight - 60;
+        const scale = Math.min(maxWidth / width, maxHeight / height);
+        const drawWidth = width * scale;
+        const drawHeight = height * scale;
+        const x = (pageWidth - drawWidth) / 2;
+        const y = (pageHeight - drawHeight) / 2;
+        page.drawImage(pngImage, { x, y, width: drawWidth, height: drawHeight });
+      }
+
+      const pdfBytes = await pdf.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      downloadBlob(blob, 'stacked.pdf');
+      toast.success('Downloaded stacked view PDF');
+    } catch {
+      toast.error('Failed to download stacked PDF');
     }
   };
 
@@ -276,48 +426,14 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
 
   return (
     <Card className="h-full bg-editor-panel border-editor-border flex flex-col">
-      <div className="flex items-center justify-between p-3 border-b border-editor-border">
+      <div className="flex items-center justify-between p-3 border-b border-editor-border relative">
         <div className="flex items-center gap-2">
           <Eye className="w-4 h-4 text-editor-keyword" />
           <h3 className="text-sm font-medium text-editor-text">Diagram Preview</h3>
           
-          {/* Section navigation - only show in sections mode */}
-          {sections.length > 0 && viewMode === 'sections' && (
-            <div className="flex items-center gap-2 ml-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleSectionChange(Math.max(0, currentSection - 1))}
-                disabled={currentSection === 0}
-                className="h-6 w-6 p-0 text-editor-comment hover:text-editor-text"
-              >
-                <ChevronLeft className="w-3 h-3" />
-              </Button>
-              
-              <span className="text-xs text-editor-comment">
-                {sections[currentSection]?.name} ({currentSection + 1}/{sections.length})
-              </span>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleSectionChange(Math.min(sections.length - 1, currentSection + 1))}
-                disabled={currentSection === sections.length - 1}
-                className="h-6 w-6 p-0 text-editor-comment hover:text-editor-text"
-              >
-                <ChevronRight className="w-3 h-3" />
-              </Button>
-            </div>
-          )}
+          {/* Section navigation moved out of header to preview area */}
           
-          {/* Stacked mode indicator */}
-          {sections.length > 0 && viewMode === 'stacked' && (
-            <div className="flex items-center gap-2 ml-4">
-              <span className="text-xs text-editor-comment">
-                All sections ({sections.length} total)
-              </span>
-            </div>
-          )}
+          
           
           {needsRefresh && !isLoading && (
             <div className="flex items-center gap-1 text-xs text-amber-400">
@@ -331,8 +447,8 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
         </div>
         
         <div className="flex items-center gap-1">
-          {/* View mode toggle - Always visible; disable Sections/Stacked if none */}
-          <div className="flex items-center gap-1 mr-2">
+          {/* View mode toggle - desktop */}
+          <div className="hidden md:flex items-center gap-1 mr-2">
             <Button
               variant={viewMode === 'full' ? 'secondary' : 'ghost'}
               size="sm"
@@ -363,25 +479,113 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
               <Layers className="w-3 h-3" />
             </Button>
           </div>
+
+          {/* View mode toggle - mobile: dropdown */}
+          <div className="md:hidden mr-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+                  title="View options"
+                >
+                  <Grid3X3 className="w-3 h-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-44">
+                <DropdownMenuItem onClick={() => setViewModeDirectly('full')}>Full</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setViewModeDirectly('sections')} disabled={sections.length === 0}>Sections</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setViewModeDirectly('stacked')} disabled={sections.length === 0}>Stacked</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
           
           <Button
             variant="ghost"
             size="sm"
             onClick={handleRefresh}
             disabled={isLoading}
-            className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+            className="hidden sm:inline-flex h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
           >
             <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleDownload}
-            disabled={!diagramUrl || isLoading}
-            className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-          >
-            <Download className="w-3 h-3" />
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+                title="Download options"
+                disabled={isLoading}
+              >
+                <Download className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => handleDownloadCurrent('svg')}>Download current (SVG)</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleDownloadCurrent('png')}>Download current (PNG)</DropdownMenuItem>
+              {sections.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => handleDownloadAllSections('svg')}>Download sections (SVG)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleDownloadAllSections('png')}>Download sections (PNG)</DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleDownloadStackedSvg}>Download stacked view (SVG)</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleDownloadStackedPdf}>Download stacked view (PDF)</DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Truly centered file name overlay */}
+        <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+          <div className="text-center max-w-[60%] pointer-events-auto">
+            <div className="text-sm text-editor-text truncate">
+              {isRenaming ? (
+                <span className="inline-flex items-center gap-1">
+                  <input
+                    ref={renameInputRef}
+                    value={renameBase}
+                    onChange={(e) => setRenameBase(e.target.value)}
+                    onBlur={async () => {
+                      if (!onRenameFile) { setIsRenaming(false); return; }
+                      const base = renameBase.trim();
+                      if (!base) { setIsRenaming(false); return; }
+                      const newName = `${base}${renameExt}`;
+                      try { await onRenameFile(newName); } finally { setIsRenaming(false); }
+                    }}
+                    onKeyDown={async (e) => {
+                      if (e.key === 'Enter') {
+                        (e.currentTarget as HTMLInputElement).blur();
+                      } else if (e.key === 'Escape') {
+                        setIsRenaming(false);
+                      }
+                    }}
+                    className="bg-editor-background border border-editor-border rounded px-2 py-1 text-sm outline-none ring-1 ring-primary/30"
+                    placeholder="File name"
+                  />
+                  <span className="text-editor-comment select-none">{renameExt}</span>
+                </span>
+              ) : (
+                <span
+                  onDoubleClick={() => {
+                    const current = fileName || 'Untitled.puml';
+                    const dot = current.lastIndexOf('.');
+                    const base = dot > 0 ? current.slice(0, dot) : current;
+                    const ext = dot > 0 ? current.slice(dot) : '.puml';
+                    setRenameBase(base);
+                    setRenameExt(ext);
+                    setIsRenaming(true);
+                  }}
+                  title="Double-click to rename"
+                >
+                  {fileName || 'Untitled.puml'}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -419,7 +623,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
                   <img
                     src={section.url}
                     alt={`Section: ${section.name}`}
-                    className="max-w-full h-auto"
+                    className="max-w-full h-auto rounded-md"
                     onError={() => setError(`Failed to load section: ${section.name}`)}
                   />
                 </div>
@@ -428,15 +632,65 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: Diagr
           </div>
         ) : diagramUrl ? (
           // Single diagram view (full or current section)
-          <div className="p-4 flex items-center justify-center min-h-full w-full">
-            <div className="w-full flex justify-center">
-              <img
-                src={diagramUrl}
-                alt="PlantUML Diagram"
-                className="max-w-full h-auto"
-                onError={() => setError("Failed to load diagram")}
-                style={{ maxWidth: '100%', height: 'auto' }}
-              />
+          <div className={`p-4 flex ${viewMode === 'sections' ? 'items-start' : 'items-center'} justify-center min-h-full w-full`}>
+            <div className="w-full">
+              {sections.length > 0 && viewMode === 'sections' ? (
+                <div className="border border-editor-border rounded-lg overflow-hidden">
+                  <div className="bg-editor-panel px-4 py-2 border-b border-editor-border flex items-center justify-between">
+                    <div>
+                      <h4 className="text-sm font-medium text-editor-text">
+                        {sections[currentSection]?.name}
+                      </h4>
+                      <p className="text-xs text-editor-comment">
+                        Section {currentSection + 1} of {sections.length}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSectionChange(Math.max(0, currentSection - 1))}
+                        disabled={currentSection === 0}
+                        className="h-6 w-6 p-0 text-editor-comment hover:text-editor-text"
+                        title="Previous section"
+                      >
+                        <ChevronLeft className="w-3 h-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSectionChange(Math.min(sections.length - 1, currentSection + 1))}
+                        disabled={currentSection === sections.length - 1}
+                        className="h-6 w-6 p-0 text-editor-comment hover:text-editor-text"
+                        title="Next section"
+                      >
+                        <ChevronRight className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="p-4 bg-editor-background">
+                    <div className="w-full flex justify-center">
+                      <img
+                        src={diagramUrl}
+                        alt="PlantUML Diagram"
+                        className="max-w-full h-auto rounded-md"
+                        onError={() => setError("Failed to load diagram")}
+                        style={{ maxWidth: '100%', height: 'auto' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="w-full flex justify-center">
+                  <img
+                    src={diagramUrl}
+                    alt="PlantUML Diagram"
+                    className="max-w-full h-auto rounded-md"
+                    onError={() => setError("Failed to load diagram")}
+                    style={{ maxWidth: '100%', height: 'auto' }}
+                  />
+                </div>
+              )}
             </div>
           </div>
         ) : (

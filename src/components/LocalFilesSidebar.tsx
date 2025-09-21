@@ -25,9 +25,10 @@ import {
 interface LocalFilesSidebarProps {
   activeFileId: string | null;
   onSelectFile: (id: string) => void;
+  onActiveFileRenamed?: (newName: string) => void;
 }
 
-export const LocalFilesSidebar = ({ activeFileId, onSelectFile }: LocalFilesSidebarProps) => {
+export const LocalFilesSidebar = ({ activeFileId, onSelectFile, onActiveFileRenamed }: LocalFilesSidebarProps) => {
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const [filter, setFilter] = useState("");
   const [isRenamingId, setIsRenamingId] = useState<string | null>(null);
@@ -50,8 +51,8 @@ export const LocalFilesSidebar = ({ activeFileId, onSelectFile }: LocalFilesSide
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    if (!q) return files;
-    return files.filter((f) => f.name.toLowerCase().includes(q));
+    const base = q ? files.filter((f) => f.name.toLowerCase().includes(q)) : files;
+    return [...base].sort((a, b) => b.updatedAt - a.updatedAt);
   }, [files, filter]);
 
   const handleCreate = async () => {
@@ -106,6 +107,9 @@ export const LocalFilesSidebar = ({ activeFileId, onSelectFile }: LocalFilesSide
     }
     await renameFile(id, name);
     toast.success("Renamed");
+    if (id === activeFileId && onActiveFileRenamed) {
+      onActiveFileRenamed(name);
+    }
     setIsRenamingId(null);
     await refreshList();
   };
