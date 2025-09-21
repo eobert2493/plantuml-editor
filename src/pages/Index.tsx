@@ -1,44 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { PlantUMLEditor } from "@/components/PlantUMLEditor";
 import { DiagramViewer } from "@/components/DiagramViewer";
-import { ExampleTemplates } from "@/components/ExampleTemplates";
+import { LocalFilesSidebar } from "@/components/LocalFilesSidebar";
 import { ResizableLayout } from "@/components/ResizableLayout";
+import { ensureDefault, getFile, updateFileContent, createFile } from "@/lib/fileStore";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { FileCode2, Github, HelpCircle, FileText, Settings, ArrowRight } from "lucide-react";
 
 const Index = () => {
-  const [plantUMLCode, setPlantUMLCode] = useState(`@startuml
-title Simple Example
-
-participant "User" as U
-participant "Browser" as B  
-participant "Server" as S
-
-U -> B: Enter URL
-B -> S: HTTP Request
-S -> B: HTTP Response  
-B -> U: Display Page
-
-@enduml`);
-
-  const [showTemplates, setShowTemplates] = useState(() => {
-    try {
-      const saved = localStorage.getItem('plantuml-show-templates');
-      return saved ? JSON.parse(saved) : false;
-    } catch {
-      return false;
-    }
-  });
+  const [plantUMLCode, setPlantUMLCode] = useState("@startuml\n@enduml\n");
+  const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const [activeEditorTab, setActiveEditorTab] = useState<'full' | 'setup' | 'sequence'>(() => {
-    try {
-      const saved = localStorage.getItem('plantuml-active-tab');
-      return saved ? JSON.parse(saved) : 'full';
-    } catch {
-      return 'full';
-    }
-  });
+  
   const [showLeftPanel, setShowLeftPanel] = useState(() => {
     try {
       const saved = localStorage.getItem('plantuml-show-left-panel');
@@ -48,16 +21,49 @@ B -> U: Display Page
     }
   });
 
-  const handleTemplateSelect = (template: string) => {
-    setPlantUMLCode(template);
-    setShowTemplates(false);
-    localStorage.setItem('plantuml-show-templates', JSON.stringify(false));
-    // Auto-refresh when template is selected
-    setRefreshTrigger(prev => prev + 1);
-  };
+  const [showFilesSidebar, setShowFilesSidebar] = useState(() => {
+    try {
+      const saved = localStorage.getItem('plantuml-show-files-sidebar');
+      return saved ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // Load or create default file
+  useEffect(() => {
+    (async () => {
+      const file = await ensureDefault(plantUMLCode);
+      setActiveFileId(file.id);
+      setPlantUMLCode(file.content);
+      setRefreshTrigger((p) => p + 1);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
+  };
+
+  // Debounced autosave
+  useEffect(() => {
+    if (!activeFileId) return;
+    const handle = setTimeout(async () => {
+      try {
+        await updateFileContent(activeFileId, plantUMLCode);
+      } catch (e) {
+        toast.error("Failed to save");
+      }
+    }, 400);
+    return () => clearTimeout(handle);
+  }, [plantUMLCode, activeFileId]);
+
+  const handleSelectFile = async (id: string) => {
+    const file = await getFile(id);
+    if (!file) return;
+    setActiveFileId(id);
+    setPlantUMLCode(file.content);
+    setRefreshTrigger((p) => p + 1);
   };
 
   // Handle keyboard shortcuts
@@ -80,10 +86,10 @@ B -> U: Display Page
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Templates Sidebar */}
-        {showTemplates && (
-          <div className="w-80 border-r border-editor-border bg-editor-background">
-            <ExampleTemplates onSelectTemplate={handleTemplateSelect} />
+        {/* Local Files Sidebar */}
+        {showFilesSidebar && (
+          <div className="w-72 border-r border-editor-border bg-editor-background">
+            <LocalFilesSidebar activeFileId={activeFileId} onSelectFile={handleSelectFile} />
           </div>
         )}
 
@@ -92,19 +98,23 @@ B -> U: Display Page
           <ResizableLayout
             leftPanel={
               showLeftPanel ? (
-                <PlantUMLEditor
-                  value={plantUMLCode}
-                  onChange={setPlantUMLCode}
-                  onRefresh={handleRefresh}
-                  activeTab={activeEditorTab}
-                  onTabChange={setActiveEditorTab}
-                />
+              <PlantUMLEditor
+                value={plantUMLCode}
+                onChange={setPlantUMLCode}
+                onRefresh={handleRefresh}
+                onToggleSidebar={() => {
+                  const next = !showFilesSidebar;
+                  setShowFilesSidebar(next);
+                  try { localStorage.setItem('plantuml-show-files-sidebar', JSON.stringify(next)); } catch {}
+                }}
+                filesSidebarVisible={showFilesSidebar}
+              />
               ) : null
             }
             rightPanel={
               <DiagramViewer 
                 plantUMLCode={plantUMLCode} 
-                key={refreshTrigger}
+                refreshTrigger={refreshTrigger}
                 onRefresh={handleRefresh}
               />
             }
@@ -117,69 +127,6 @@ B -> U: Display Page
       <footer className="bg-editor-panel border-t border-editor-border px-4 py-2">
         <div className="flex items-center justify-between text-xs text-editor-comment">
           <div className="flex items-center gap-3">
-            {/* Editor Tab Navigation */}
-            <div className="flex items-center gap-1">
-              <Button
-                variant={activeEditorTab === 'full' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  setActiveEditorTab('full');
-                  localStorage.setItem('plantuml-active-tab', JSON.stringify('full'));
-                }}
-                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text"
-              >
-                <FileText className="w-3 h-3 mr-1" />
-                Full
-              </Button>
-              <Button
-                variant={activeEditorTab === 'setup' ? 'secondary' : 'ghost'}
-                size="sm"
-                disabled={!plantUMLCode.split('\n').some(line => {
-                  const trimmed = line.trim();
-                  return trimmed.startsWith('participant') ||
-                         trimmed.startsWith('actor') ||
-                         trimmed.startsWith('boundary') ||
-                         trimmed.startsWith('control') ||
-                         trimmed.startsWith('entity') ||
-                         trimmed.startsWith('database') ||
-                         trimmed.startsWith('collections') ||
-                         trimmed.startsWith('queue') ||
-                         trimmed.startsWith('box') ||
-                         trimmed.startsWith('title') ||
-                         trimmed.startsWith('skinparam');
-                })}
-                onClick={() => {
-                  setActiveEditorTab('setup');
-                  localStorage.setItem('plantuml-active-tab', JSON.stringify('setup'));
-                }}
-                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text disabled:opacity-50"
-              >
-                <Settings className="w-3 h-3 mr-1" />
-                Setup
-              </Button>
-              <Button
-                variant={activeEditorTab === 'sequence' ? 'secondary' : 'ghost'}
-                size="sm"
-                disabled={!plantUMLCode.split('\n').some(line => {
-                  const trimmed = line.trim();
-                  return trimmed.includes('->') || 
-                         trimmed.includes('<-') || 
-                         trimmed.includes('-->') ||
-                         trimmed.includes('<--') ||
-                         trimmed.includes('..>') ||
-                         trimmed.includes('<..');
-                })}
-                onClick={() => {
-                  setActiveEditorTab('sequence');
-                  localStorage.setItem('plantuml-active-tab', JSON.stringify('sequence'));
-                }}
-                className="h-6 px-2 text-xs text-editor-comment hover:text-editor-text disabled:opacity-50"
-              >
-                <ArrowRight className="w-3 h-3 mr-1" />
-                Sequence
-              </Button>
-            </div>
-            <div className="text-editor-border">•</div>
             <div>
               Ready • {plantUMLCode.split('\n').length} lines
             </div>

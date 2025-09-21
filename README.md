@@ -1,73 +1,70 @@
-# Welcome to your Lovable project
+## Full Screen PlantUML
 
-## Project info
+A minimal, fast PlantUML editor and previewer with a full‑screen, split layout. Write PlantUML on the left, see an SVG preview on the right. Includes section navigation with `== Section ==` markers and handy export actions.
 
-**URL**: https://lovable.dev/projects/bfbc3f1b-9636-4eac-8f78-92f7e3cb901d
+### Features
 
-## How can I edit this code?
+- **Full‑screen workspace**: Editor and preview in a clean, distraction‑free layout.
+- **Clean editor**: Single editor view with no extra tab switching.
+- **Section navigation**: Use PlantUML headers like `== My Section ==` to split large sequence diagrams.
+- **Multiple preview modes**: Switch between **Full**, **Sections**, and **Stacked** views.
+- **Templates**: Quickly start with common diagram types.
+- **One‑key refresh**: Regenerate the diagram without leaving the keyboard.
+- **Export & copy**: Copy code, export `.puml`, and download the rendered `.svg`.
 
-There are several ways of editing your application.
+### Quick start
 
-**Use Lovable**
+Prerequisites: Node.js 18+ and npm
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/bfbc3f1b-9636-4eac-8f78-92f7e3cb901d) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Open `http://localhost:5173`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Usage
 
-**Use GitHub Codespaces**
+- **Write PlantUML** in the editor between `@startuml` and `@enduml`.
+- **Sections**: Add headers like `== Login ==`, `== Checkout ==` to split big sequences. The preview provides:
+  - **Sections** mode: Navigate one section at a time.
+  - **Stacked** mode: See all sections vertically.
+- **Actions**:
+  - Editor toolbar: Copy, Export `.puml`.
+  - Preview toolbar: Refresh, Download `.svg`, toggle view modes.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Keyboard shortcuts
 
-## What technologies are used for this project?
+- **Cmd+J / Ctrl+J**: Refresh diagram
+- **Cmd+B / Ctrl+B**: Toggle editor panel visibility
 
-This project is built with:
+### How rendering works
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Diagrams are encoded in the browser using `plantuml-encoder` and rendered through the public PlantUML server as SVG:
 
-## How can I deploy this project?
+`https://www.plantuml.com/plantuml/svg/{encoded}`
 
-Simply open [Lovable](https://lovable.dev/projects/bfbc3f1b-9636-4eac-8f78-92f7e3cb901d) and click on Share -> Publish.
+Note: Your diagram text is sent to the PlantUML server to render. If you require full privacy or offline rendering, point the code to a self‑hosted PlantUML server.
 
-## Can I connect a custom domain to my Lovable project?
+### Scripts
 
-Yes, you can!
+- `npm run dev`: Start Vite dev server
+- `npm run build`: Production build
+- `npm run build:dev`: Development‑mode build
+- `npm run preview`: Preview production build
+- `npm run lint`: Lint the project
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+### Tech stack
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Vite, React, TypeScript
+- Tailwind CSS, shadcn‑ui (Radix UI)
+- CodeMirror 6 with PlantUML syntax highlighting
+- `plantuml-encoder` for URL encoding
+
+### Tips
+
+- The app remembers whether the editor panel is visible via `localStorage`.
+
+### License
+
+See the repository license file if present.

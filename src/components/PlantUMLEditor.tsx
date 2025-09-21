@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Copy, FileText, Download, Zap, Settings, ArrowRight, Users } from "lucide-react";
+import { Copy, FileText, Download, PanelLeft } from "lucide-react";
 import CodeMirror from "@uiw/react-codemirror";
 import { plantuml } from "@/lib/plantuml-lang";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -17,6 +17,8 @@ interface PlantUMLEditorProps {
   onTabChange?: (tab: 'full' | 'setup' | 'sequence') => void;
   hasSetupContent?: boolean;
   hasSequenceContent?: boolean;
+  onToggleSidebar?: () => void;
+  filesSidebarVisible?: boolean;
 }
 
 interface CodeSection {
@@ -26,8 +28,7 @@ interface CodeSection {
   icon: string;
 }
 
-export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false }: PlantUMLEditorProps) => {
-  const [lineCount, setLineCount] = useState(1);
+export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false, onToggleSidebar, filesSidebarVisible = true }: PlantUMLEditorProps) => {
   
   // Define code sections
   const codeSections: Record<string, CodeSection> = {
@@ -45,10 +46,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
     }
   };
 
-  useEffect(() => {
-    const lines = value.split('\n').length;
-    setLineCount(lines);
-  }, [value]);
+  // Removed line count from header to keep UI minimal
 
 
   // Parse content based on active tab
@@ -254,25 +252,21 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
     <Card className="h-full bg-editor-panel border-editor-border flex flex-col">
       <div className="flex items-center justify-between p-3 border-b border-editor-border">
         <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-editor-keyword" />
-          <h3 className="text-sm font-medium text-editor-text">PlantUML Editor</h3>
-          <span className="text-xs text-editor-comment">
-            {lineCount} line{lineCount !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          {onRefresh && (
+          {onToggleSidebar && (
             <Button
-              variant="ghost"
-              size="sm"
-              onClick={onRefresh}
-              className="h-8 px-2 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-              title="Refresh diagram (Cmd+J)"
+              variant={filesSidebarVisible ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={onToggleSidebar}
+              className="h-7 w-7 text-editor-comment hover:text-editor-text"
+              title={filesSidebarVisible ? 'Hide files sidebar' : 'Show files sidebar'}
             >
-              <Zap className="w-3 h-3 mr-1" />
-              <span className="text-xs">Refresh</span>
+              <PanelLeft className="w-4 h-4" />
             </Button>
           )}
+          <FileText className="w-4 h-4 text-editor-keyword" />
+          <h3 className="text-sm font-medium text-editor-text">PlantUML Editor</h3>
+        </div>
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="sm"

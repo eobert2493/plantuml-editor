@@ -9,9 +9,10 @@ interface DiagramViewerProps {
   plantUMLCode: string;
   onRefresh?: () => void;
   editorTab?: 'full' | 'setup' | 'sequence';
+  refreshTrigger?: number;
 }
 
-export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) => {
+export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger }: DiagramViewerProps) => {
   const [diagramUrl, setDiagramUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -19,7 +20,14 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [sections, setSections] = useState<Array<{name: string, code: string, url: string}>>([]);
   const [currentSection, setCurrentSection] = useState(0);
-  const [viewMode, setViewMode] = useState<'full' | 'sections' | 'stacked'>('full');
+  const [viewMode, setViewMode] = useState<'full' | 'sections' | 'stacked'>(() => {
+    try {
+      const saved = localStorage.getItem('plantuml-view-mode');
+      return saved ? JSON.parse(saved) : 'full';
+    } catch {
+      return 'full';
+    }
+  });
 
   // Parse sections from PlantUML code
   const parseSections = useCallback((code: string) => {
@@ -104,6 +112,9 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
   }, []);
 
   const generateDiagram = useCallback(async () => {
+    const previousSections = sections;
+    const previousSelectedName = previousSections[currentSection]?.name;
+
     if (!plantUMLCode.trim()) {
       setDiagramUrl("");
       setError("");
@@ -119,7 +130,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
     try {
       // Parse sections
       const parsedSections = parseSections(plantUMLCode);
-      
+
       if (parsedSections.length > 0) {
         // Generate URLs for all sections
         const sectionsWithUrls = await Promise.all(
@@ -131,18 +142,46 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
             };
           })
         );
-        
+
         setSections(sectionsWithUrls);
-        setCurrentSection(0);
-        setViewMode('sections');
-        setDiagramUrl(sectionsWithUrls[0]?.url || '');
+
+        // Preserve selected section if it still exists
+        let nextIndex = 0;
+        if (previousSelectedName) {
+          const foundIndex = sectionsWithUrls.findIndex(s => s.name === previousSelectedName);
+          if (foundIndex >= 0) nextIndex = foundIndex;
+        } else if (currentSection < sectionsWithUrls.length) {
+          nextIndex = currentSection;
+        }
+        setCurrentSection(nextIndex);
+
+        // Determine desired view mode: restore saved if compatible, else keep current
+        let desired: 'full' | 'sections' | 'stacked' = viewMode;
+        try {
+          const saved = localStorage.getItem('plantuml-view-mode');
+          if (saved) desired = JSON.parse(saved);
+        } catch {}
+
+        // If desired is sections or stacked, use it; if full, show full
+        if (desired === 'full') {
+          const encoded = plantumlEncoder.encode(plantUMLCode);
+          setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+          setViewMode('full');
+        } else if (desired === 'sections') {
+          setDiagramUrl(sectionsWithUrls[nextIndex]?.url || '');
+          setViewMode('sections');
+        } else if (desired === 'stacked') {
+          setDiagramUrl('');
+          setViewMode('stacked');
+        }
       } else {
-        // Generate full diagram
+        // No sections; force full view
         const encoded = plantumlEncoder.encode(plantUMLCode);
         const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
         setDiagramUrl(url);
         setSections([]);
         setViewMode('full');
+        try { localStorage.setItem('plantuml-view-mode', JSON.stringify('full')); } catch {}
       }
       
       setLastGeneratedCode(plantUMLCode);
@@ -171,6 +210,14 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
       generateDiagram();
     }
   }, [plantUMLCode, lastGeneratedCode, generateDiagram]);
+
+  // Trigger regeneration when parent requests refresh without remount
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      generateDiagram();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger]);
 
   const handleDownload = async () => {
     if (!diagramUrl) {
@@ -208,17 +255,22 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
   };
 
   const setViewModeDirectly = (mode: 'full' | 'sections' | 'stacked') => {
+    if (mode === 'full') {
+      setViewMode('full');
+      const encoded = plantumlEncoder.encode(plantUMLCode);
+      setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+      try { localStorage.setItem('plantuml-view-mode', JSON.stringify('full')); } catch {}
+      return;
+    }
+
     if (sections.length > 0) {
       setViewMode(mode);
-      
-      if (mode === 'full') {
-        const encoded = plantumlEncoder.encode(plantUMLCode);
-        setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
-      } else if (mode === 'sections') {
+      if (mode === 'sections') {
         setDiagramUrl(sections[currentSection]?.url || '');
       } else if (mode === 'stacked') {
         setDiagramUrl(''); // Not needed for stacked view
       }
+      try { localStorage.setItem('plantuml-view-mode', JSON.stringify(mode)); } catch {}
     }
   };
 
@@ -279,38 +331,38 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
         </div>
         
         <div className="flex items-center gap-1">
-          {/* View mode toggle - Three separate buttons */}
-          {sections.length > 0 && (
-            <div className="flex items-center gap-1 mr-2">
-              <Button
-                variant={viewMode === 'full' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewModeDirectly('full')}
-                className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-                title="Full diagram view"
-              >
-                <Eye className="w-3 h-3" />
-              </Button>
-              <Button
-                variant={viewMode === 'sections' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewModeDirectly('sections')}
-                className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-                title="Section navigation view"
-              >
-                <Grid3X3 className="w-3 h-3" />
-              </Button>
-              <Button
-                variant={viewMode === 'stacked' ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => setViewModeDirectly('stacked')}
-                className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-                title="Stacked sections view"
-              >
-                <Layers className="w-3 h-3" />
-              </Button>
-            </div>
-          )}
+          {/* View mode toggle - Always visible; disable Sections/Stacked if none */}
+          <div className="flex items-center gap-1 mr-2">
+            <Button
+              variant={viewMode === 'full' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewModeDirectly('full')}
+              className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+              title="Full diagram view"
+            >
+              <Eye className="w-3 h-3" />
+            </Button>
+            <Button
+              variant={viewMode === 'sections' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewModeDirectly('sections')}
+              disabled={sections.length === 0}
+              className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background disabled:opacity-50"
+              title="Section navigation view"
+            >
+              <Grid3X3 className="w-3 h-3" />
+            </Button>
+            <Button
+              variant={viewMode === 'stacked' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewModeDirectly('stacked')}
+              disabled={sections.length === 0}
+              className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background disabled:opacity-50"
+              title="Stacked sections view"
+            >
+              <Layers className="w-3 h-3" />
+            </Button>
+          </div>
           
           <Button
             variant="ghost"
@@ -353,14 +405,14 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh }: DiagramViewerProps) =
         ) : viewMode === 'stacked' && sections.length > 0 ? (
           // Stacked view - show all sections vertically
           <div className="p-4 space-y-6">
-            {sections.map((section, index) => (
-              <div key={index} className="border border-editor-border rounded-lg overflow-hidden">
+            {sections.map((section) => (
+              <div key={section.name} className="border border-editor-border rounded-lg overflow-hidden">
                 <div className="bg-editor-panel px-4 py-2 border-b border-editor-border">
                   <h4 className="text-sm font-medium text-editor-text">
                     {section.name}
                   </h4>
                   <p className="text-xs text-editor-comment">
-                    Section {index + 1} of {sections.length}
+                    {/* Index displayed below may be off if names duplicate */}
                   </p>
                 </div>
                 <div className="p-4 bg-editor-background flex justify-center">

@@ -9,14 +9,16 @@ interface ResizableLayoutProps {
 }
 
 export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false }: ResizableLayoutProps) => {
-  const [leftWidth, setLeftWidth] = useState(() => {
+  // Track left panel width in pixels to avoid layout shifts on content changes
+  const [leftWidthPx, setLeftWidthPx] = useState<number>(() => {
     try {
-      const saved = localStorage.getItem('plantuml-left-width');
-      return saved ? JSON.parse(saved) : 50;
+      const savedPx = localStorage.getItem('plantuml-left-width-px');
+      if (savedPx) return JSON.parse(savedPx);
+      return -1; // will be initialized after mount
     } catch {
-      return 50;
+      return -1;
     }
-  }); // percentage
+  });
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -29,12 +31,15 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
     if (!isDragging || !containerRef.current) return;
 
     const containerRect = containerRef.current.getBoundingClientRect();
-    const newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
-    
-    // Constrain between 20% and 80%
-    const clampedWidth = Math.max(20, Math.min(80, newLeftWidth));
-    setLeftWidth(clampedWidth);
-    localStorage.setItem('plantuml-left-width', JSON.stringify(clampedWidth));
+    const proposedPx = e.clientX - containerRect.left;
+    // Constrain between 20% and 80% of container width
+    const minPx = containerRect.width * 0.2;
+    const maxPx = containerRect.width * 0.8;
+    const clampedPx = Math.max(minPx, Math.min(maxPx, proposedPx));
+    setLeftWidthPx(clampedPx);
+    try {
+      localStorage.setItem('plantuml-left-width-px', JSON.stringify(clampedPx));
+    } catch {}
   }, [isDragging]);
 
   const handleMouseUp = useCallback(() => {
@@ -63,6 +68,25 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
+  // Initialize pixel width on first mount when container size is known
+  useEffect(() => {
+    if (leftWidthPx >= 0) return; // already initialized
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    // Try to migrate from old percent setting if present
+    let initialPx = containerRect.width * 0.5;
+    try {
+      const savedPercent = localStorage.getItem('plantuml-left-width');
+      if (savedPercent) {
+        initialPx = (JSON.parse(savedPercent) as number) / 100 * containerRect.width;
+      }
+    } catch {}
+    setLeftWidthPx(initialPx);
+    try {
+      localStorage.setItem('plantuml-left-width-px', JSON.stringify(initialPx));
+    } catch {}
+  }, [leftWidthPx]);
+
   return (
     <div 
       ref={containerRef}
@@ -73,9 +97,9 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
         <div 
           className="flex-shrink-0 overflow-hidden min-w-0"
           style={{ 
-            width: `${leftWidth}%`,
-            minWidth: `${leftWidth}%`,
-            maxWidth: `${leftWidth}%`
+            width: leftWidthPx >= 0 ? `${leftWidthPx}px` : undefined,
+            minWidth: leftWidthPx >= 0 ? `${leftWidthPx}px` : undefined,
+            maxWidth: leftWidthPx >= 0 ? `${leftWidthPx}px` : undefined
           }}
         >
           {leftPanel}
@@ -98,13 +122,10 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
 
       {/* Right Panel */}
       <div 
-        className="overflow-hidden min-w-0"
+        className={cn("overflow-hidden min-w-0", (hideLeftPanel || !leftPanel) ? "w-full" : "flex-1")}
         style={{ 
-          width: hideLeftPanel || !leftPanel ? '100%' : `${100 - leftWidth}%`,
-          minWidth: hideLeftPanel || !leftPanel ? '100%' : `${100 - leftWidth}%`,
-          maxWidth: hideLeftPanel || !leftPanel ? '100%' : `${100 - leftWidth}%`,
-          flexShrink: 0,
-          flexGrow: 0
+          flexShrink: 1,
+          flexGrow: (hideLeftPanel || !leftPanel) ? 0 : 1
         }}
       >
         {rightPanel}
