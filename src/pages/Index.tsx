@@ -47,13 +47,19 @@ const Index = () => {
       return false;
     }
   });
-  type KeyAction = 'toggleVim' | 'toggleLayout';
+  type KeyAction = 'toggleVim' | 'toggleLayout' | 'openFiles' | 'refresh' | 'toggleEditor';
   type KeyBinding = { meta: boolean; ctrl: boolean; alt: boolean; shift: boolean; code: string };
   const defaultKeyBindings: Record<KeyAction, KeyBinding> = {
     // Default Vim toggle (mac): Cmd+Shift+V
     toggleVim: { meta: true, ctrl: false, alt: false, shift: true, code: 'KeyV' },
     // Default Layout toggle: Cmd+I
     toggleLayout: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyI' },
+    // Default Open Files palette: Cmd+K
+    openFiles: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyK' },
+    // Default Refresh diagram: Cmd+J
+    refresh: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyJ' },
+    // Default Toggle editor: Cmd+B
+    toggleEditor: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyB' },
   };
   const [keyBindings, setKeyBindings] = useState<Record<KeyAction, KeyBinding>>(() => {
     try {
@@ -87,7 +93,10 @@ const Index = () => {
         return {
           toggleVim: normalize(parsed.toggleVim, defaultKeyBindings.toggleVim),
           toggleLayout: normalize(parsed.toggleLayout, defaultKeyBindings.toggleLayout),
-        };
+          openFiles: normalize(parsed.openFiles, defaultKeyBindings.openFiles),
+          refresh: normalize(parsed.refresh, defaultKeyBindings.refresh),
+          toggleEditor: normalize(parsed.toggleEditor, defaultKeyBindings.toggleEditor),
+        } as Record<KeyAction, KeyBinding>;
       }
     } catch {}
     return defaultKeyBindings;
@@ -192,21 +201,7 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Command+K listener for file palette
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsFilePaletteOpen(true);
-        (async () => {
-          const list = await listFiles();
-          setFilesForPalette(list.map(f => ({ id: f.id, name: f.name, updatedAt: f.updatedAt })));
-        })();
-      }
-    };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  // File palette is now opened via configurable keybinding (see handleKeyDown)
 
   // Apply page theme to html element
   useEffect(() => {
@@ -274,11 +269,12 @@ const Index = () => {
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
+    // Toggle editor panel (configurable)
+    if (matchesBinding(event, keyBindings.toggleEditor)) {
       event.preventDefault();
       const newShowLeftPanel = !showLeftPanel;
       setShowLeftPanel(newShowLeftPanel);
-      localStorage.setItem('plantuml-show-left-panel', JSON.stringify(newShowLeftPanel));
+      try { localStorage.setItem('plantuml-show-left-panel', JSON.stringify(newShowLeftPanel)); } catch {}
       return;
     }
     // Toggle Vim mode (configurable)
@@ -297,6 +293,22 @@ const Index = () => {
       setSplitOrientation(next);
       try { localStorage.setItem('split-orientation', next); } catch {}
       toast.success(`Layout set to ${next === 'horizontal' ? 'Left/Right' : 'Top/Bottom'}`);
+      return;
+    }
+    // Open files palette (configurable)
+    if (matchesBinding(event, keyBindings.openFiles)) {
+      event.preventDefault();
+      setIsFilePaletteOpen(true);
+      (async () => {
+        const list = await listFiles();
+        setFilesForPalette(list.map(f => ({ id: f.id, name: f.name, updatedAt: f.updatedAt })));
+      })();
+      return;
+    }
+    // Refresh diagram (configurable)
+    if (matchesBinding(event, keyBindings.refresh)) {
+      event.preventDefault();
+      handleRefresh();
       return;
     }
   }, [showLeftPanel, vimModeEnabled, keyBindings, splitOrientation]);
@@ -330,7 +342,7 @@ const Index = () => {
                 vimModeEnabled={vimModeEnabled}
                 editorOptions={{
                   renderWhitespace: 'selection',
-                  renderIndentGuides: true,
+                  // Indentation guides are enabled via `guides.indentation`
                   guides: { indentation: true, bracketPairs: true },
                   cursorBlinking: 'smooth',
                   cursorSmoothCaretAnimation: 'on',
@@ -340,9 +352,8 @@ const Index = () => {
                   bracketPairColorization: { enabled: true },
                   formatOnPaste: false,
                   formatOnType: false,
-                  occurrencesHighlight: true,
-                  selectionHighlight: true,
-                  wordBasedSuggestions: true,
+                  // Rely on Monaco defaults for occurrences/selection highlighting
+                  wordBasedSuggestions: 'allDocuments',
                   quickSuggestions: { other: true, comments: false, strings: true },
                   folding: true,
                   foldingHighlight: true,
@@ -419,7 +430,7 @@ const Index = () => {
             </DropdownMenu>
             {showFooterHints && (
               <span>
-                Cmd+K: files • Cmd+J: refresh • Cmd+B: toggle editor • Vim: {bindingToString(keyBindings.toggleVim)} • Layout: {bindingToString(keyBindings.toggleLayout)}
+                Files: {bindingToString(keyBindings.openFiles)} • Refresh: {bindingToString(keyBindings.refresh)} • Toggle editor: {bindingToString(keyBindings.toggleEditor)} • Vim: {bindingToString(keyBindings.toggleVim)} • Layout: {bindingToString(keyBindings.toggleLayout)}
               </span>
             )}
           </div>
@@ -499,12 +510,12 @@ const Index = () => {
 
       {/* Keyboard Shortcuts Modal */}
       <Dialog open={isKeybindsOpen} onOpenChange={setIsKeybindsOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[1000px]">
           <DialogHeader>
             <DialogTitle>Keyboard Shortcuts</DialogTitle>
             <DialogDescription>Select modifiers and a key. Changes save immediately.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div className="text-sm">
                 <div className="font-medium">Toggle Vim mode</div>
@@ -563,6 +574,96 @@ const Index = () => {
                 </Select>
                 <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleLayout: { meta:false, ctrl:false, alt:false, shift:false, code:'none' } }; saveKeyBindings(next); }}>Clear</Button>
                 <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleLayout: defaultKeyBindings.toggleLayout }; saveKeyBindings(next); }}>Reset</Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <div className="font-medium">Open Files Palette</div>
+                <div className="text-xs text-muted-foreground">Current: {bindingToString(keyBindings.openFiles)}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="files-cmd" checked={keyBindings.openFiles.meta} onCheckedChange={(c) => updateBindingPartial('openFiles', { meta: !!c })} />
+                  <label htmlFor="files-cmd" className="text-xs">Cmd</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="files-alt" checked={keyBindings.openFiles.alt} onCheckedChange={(c) => updateBindingPartial('openFiles', { alt: !!c })} />
+                  <label htmlFor="files-alt" className="text-xs">Alt</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="files-shift" checked={keyBindings.openFiles.shift} onCheckedChange={(c) => updateBindingPartial('openFiles', { shift: !!c })} />
+                  <label htmlFor="files-shift" className="text-xs">Shift</label>
+                </div>
+                <Select value={keyBindings.openFiles.code} onValueChange={(v) => updateBindingPartial('openFiles', { code: v })}>
+                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue placeholder="Key" /></SelectTrigger>
+                  <SelectContent className="text-xs">
+                    {['KeyA','KeyB','KeyC','KeyD','KeyE','KeyF','KeyG','KeyH','KeyI','KeyJ','KeyK','KeyL','KeyM','KeyN','KeyO','KeyP','KeyQ','KeyR','KeyS','KeyT','KeyU','KeyV','KeyW','KeyX','KeyY','KeyZ','Digit0','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Enter','Tab','Space','Backspace'].map(k => (
+                      <SelectItem key={k} value={k}>{k.startsWith('Key') ? k.slice(3) : k.startsWith('Digit') ? k.slice(5) : k}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, openFiles: { meta:false, ctrl:false, alt:false, shift:false, code:'none' } }; saveKeyBindings(next); }}>Clear</Button>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, openFiles: defaultKeyBindings.openFiles }; saveKeyBindings(next); }}>Reset</Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <div className="font-medium">Refresh Diagram</div>
+                <div className="text-xs text-muted-foreground">Current: {bindingToString(keyBindings.refresh)}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="refresh-cmd" checked={keyBindings.refresh.meta} onCheckedChange={(c) => updateBindingPartial('refresh', { meta: !!c })} />
+                  <label htmlFor="refresh-cmd" className="text-xs">Cmd</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="refresh-alt" checked={keyBindings.refresh.alt} onCheckedChange={(c) => updateBindingPartial('refresh', { alt: !!c })} />
+                  <label htmlFor="refresh-alt" className="text-xs">Alt</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="refresh-shift" checked={keyBindings.refresh.shift} onCheckedChange={(c) => updateBindingPartial('refresh', { shift: !!c })} />
+                  <label htmlFor="refresh-shift" className="text-xs">Shift</label>
+                </div>
+                <Select value={keyBindings.refresh.code} onValueChange={(v) => updateBindingPartial('refresh', { code: v })}>
+                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue placeholder="Key" /></SelectTrigger>
+                  <SelectContent className="text-xs">
+                    {['KeyA','KeyB','KeyC','KeyD','KeyE','KeyF','KeyG','KeyH','KeyI','KeyJ','KeyK','KeyL','KeyM','KeyN','KeyO','KeyP','KeyQ','KeyR','KeyS','KeyT','KeyU','KeyV','KeyW','KeyX','KeyY','KeyZ','Digit0','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Enter','Tab','Space','Backspace'].map(k => (
+                      <SelectItem key={k} value={k}>{k.startsWith('Key') ? k.slice(3) : k.startsWith('Digit') ? k.slice(5) : k}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, refresh: { meta:false, ctrl:false, alt:false, shift:false, code:'none' } }; saveKeyBindings(next); }}>Clear</Button>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, refresh: defaultKeyBindings.refresh }; saveKeyBindings(next); }}>Reset</Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <div className="font-medium">Toggle Editor Panel</div>
+                <div className="text-xs text-muted-foreground">Current: {bindingToString(keyBindings.toggleEditor)}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="editor-cmd" checked={keyBindings.toggleEditor.meta} onCheckedChange={(c) => updateBindingPartial('toggleEditor', { meta: !!c })} />
+                  <label htmlFor="editor-cmd" className="text-xs">Cmd</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="editor-alt" checked={keyBindings.toggleEditor.alt} onCheckedChange={(c) => updateBindingPartial('toggleEditor', { alt: !!c })} />
+                  <label htmlFor="editor-alt" className="text-xs">Alt</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="editor-shift" checked={keyBindings.toggleEditor.shift} onCheckedChange={(c) => updateBindingPartial('toggleEditor', { shift: !!c })} />
+                  <label htmlFor="editor-shift" className="text-xs">Shift</label>
+                </div>
+                <Select value={keyBindings.toggleEditor.code} onValueChange={(v) => updateBindingPartial('toggleEditor', { code: v })}>
+                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue placeholder="Key" /></SelectTrigger>
+                  <SelectContent className="text-xs">
+                    {['KeyA','KeyB','KeyC','KeyD','KeyE','KeyF','KeyG','KeyH','KeyI','KeyJ','KeyK','KeyL','KeyM','KeyN','KeyO','KeyP','KeyQ','KeyR','KeyS','KeyT','KeyU','KeyV','KeyW','KeyX','KeyY','KeyZ','Digit0','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Enter','Tab','Space','Backspace'].map(k => (
+                      <SelectItem key={k} value={k}>{k.startsWith('Key') ? k.slice(3) : k.startsWith('Digit') ? k.slice(5) : k}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleEditor: { meta:false, ctrl:false, alt:false, shift:false, code:'none' } }; saveKeyBindings(next); }}>Clear</Button>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleEditor: defaultKeyBindings.toggleEditor }; saveKeyBindings(next); }}>Reset</Button>
               </div>
             </div>
           </div>
