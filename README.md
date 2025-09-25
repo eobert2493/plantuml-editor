@@ -29,7 +29,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173`.
+Open `http://localhost:8080`.
 
 ### Usage
 
@@ -49,15 +49,53 @@ Open `http://localhost:5173`.
 
 ### Keyboard shortcuts
 
+Defaults (you can change these in Settings → Keyboard Shortcuts…):
+
 - **Cmd+K / Ctrl+K**: File palette (search, create, delete)
 - **Cmd+J / Ctrl+J**: Refresh diagram
-- **Cmd+B / Ctrl+B**: Toggle editor panel visibility
+- **Cmd+B / Ctrl+B**: Toggle editor panel
+- **Cmd+I**: Toggle Left/Right vs Top/Bottom layout
+- **Cmd+Shift+V**: Toggle Vim mode (Monaco Vim)
+
+Notes:
+- All keystrokes are configurable. Choose Cmd/Alt/Shift and a key from the dropdowns; changes persist.
+- Clearing a binding disables that shortcut.
 
 ### How rendering works
 
-Diagrams are encoded in the browser using `plantuml-encoder` and rendered via the public PlantUML server (`/svg` or `/png`). The stacked PDF export embeds section PNGs using `pdf-lib`.
+Diagrams are encoded in the browser using `plantuml-encoder` and rendered by a PlantUML server (`/svg` or `/png`). The stacked PDF export embeds section PNGs using `pdf-lib`.
 
-Note: Diagram text is sent to the PlantUML server to render. For privacy/offline needs, point requests to your own PlantUML server.
+Renderer options (footer Settings → Renderer):
+- **Public**: `https://www.plantuml.com/plantuml`
+- **Custom**: any base you provide; example: `http://localhost:8080` or `http://localhost:8080/plantuml` if mounted behind a reverse proxy path. A health check indicator shows online/offline based on a minimal request to `<base>/svg/<encoded>`.
+
+Docker quick start (self‑hosted):
+```bash
+docker run -d --name plantuml -p 8080:8080 plantuml/plantuml-server:jetty
+```
+Then set the app Renderer to Custom with base `http://localhost:8080`.
+
+Test your server directly in a browser (should render SVG):
+```
+http://localhost:8080/svg/SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1
+```
+
+#### Using a local PlantUML server with Docker (custom host port)
+
+If you prefer to run on a different host port (e.g., 9090), map your host port to the container’s 8080:
+
+```bash
+docker pull plantuml/plantuml-server:jetty
+docker run -d --name plantuml -p 9090:8080 plantuml/plantuml-server:jetty
+```
+
+- In the app footer Settings, change Renderer from Public to Custom and set the base to `http://localhost:9090` (no trailing `/plantuml`).
+- The container always listens on port 8080 internally; you can bind any free host port to it using `-p <hostPort>:8080`.
+- Validate your local server by opening this in a browser:
+
+```
+http://localhost:9090/svg/SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1
+```
 
 ### Scripts
 
@@ -77,7 +115,12 @@ Note: Diagram text is sent to the PlantUML server to render. For privacy/offline
 ### Tips
 
 - Files, layout, and themes persist in `localStorage`/IndexedDB.
-- In vertical layout, editor is pinned to the bottom.
+- Footer has quick controls: theme, editor show/hide, layout switch, server status, Settings (keyboard shortcuts, renderer selection, toggle footer hints).
+- In vertical (Top/Bottom) layout, the editor is pinned to the bottom; the “Show/Hide Editor” button hides or reveals it.
+
+### Vim mode
+
+- Vim keybindings are provided via `monaco-vim`. Enable/disable from Settings or the configured shortcut (default: Cmd+Shift+V). A “VIM” indicator appears in the editor header when enabled.
 
 ### License
 
