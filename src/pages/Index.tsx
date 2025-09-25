@@ -7,8 +7,12 @@ import { ensureDefault, getFile, updateFileContent, createFile, listFiles, renam
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
-import { Moon, Sun, Palette } from "lucide-react";
+import { Moon, Sun, Palette, Settings } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 const Index = () => {
   const [plantUMLCode, setPlantUMLCode] = useState("@startuml\n@enduml\n");
@@ -35,7 +39,109 @@ const Index = () => {
       return 'dark';
     }
   });
-  
+  const [vimModeEnabled, setVimModeEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('plantuml-vim-mode');
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
+  type KeyAction = 'toggleVim' | 'toggleLayout';
+  type KeyBinding = { meta: boolean; ctrl: boolean; alt: boolean; shift: boolean; code: string };
+  const defaultKeyBindings: Record<KeyAction, KeyBinding> = {
+    // Default Vim toggle (mac): Cmd+Shift+V
+    toggleVim: { meta: true, ctrl: false, alt: false, shift: true, code: 'KeyV' },
+    // Default Layout toggle: Cmd+I
+    toggleLayout: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyI' },
+  };
+  const [keyBindings, setKeyBindings] = useState<Record<KeyAction, KeyBinding>>(() => {
+    try {
+      const raw = localStorage.getItem('plantuml-keybindings');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const normalize = (kb: any, fallback: KeyBinding): KeyBinding => {
+          const meta = !!kb?.meta;
+          const alt = !!kb?.alt;
+          const shift = !!kb?.shift;
+          let code: string | undefined = typeof kb?.code === 'string' ? kb.code : undefined;
+          if (!code) {
+            const keyVal: string | undefined = typeof kb?.key === 'string' ? kb.key : undefined;
+            if (keyVal) {
+              if (/^[a-z]$/i.test(keyVal)) code = `Key${keyVal.toUpperCase()}`;
+              else if (/^\d$/.test(keyVal)) code = `Digit${keyVal}`;
+              else if (keyVal.toLowerCase() === 'enter') code = 'Enter';
+              else if (keyVal.toLowerCase() === 'tab') code = 'Tab';
+              else if (keyVal.toLowerCase() === 'space') code = 'Space';
+              else if (keyVal.toLowerCase() === 'backspace') code = 'Backspace';
+            }
+          }
+          return {
+            meta,
+            ctrl: false,
+            alt,
+            shift,
+            code: code || fallback.code,
+          };
+        };
+        return {
+          toggleVim: normalize(parsed.toggleVim, defaultKeyBindings.toggleVim),
+          toggleLayout: normalize(parsed.toggleLayout, defaultKeyBindings.toggleLayout),
+        };
+      }
+    } catch {}
+    return defaultKeyBindings;
+  });
+  const saveKeyBindings = (next: Record<KeyAction, KeyBinding>) => {
+    setKeyBindings(next);
+    try { localStorage.setItem('plantuml-keybindings', JSON.stringify(next)); } catch {}
+  };
+  const updateBindingPartial = (action: KeyAction, partial: Partial<KeyBinding>) => {
+    const current = keyBindings[action];
+    const updated: KeyBinding = {
+      meta: partial.meta ?? current.meta,
+      ctrl: false, // ctrl not configurable in simplified UI
+      alt: partial.alt ?? current.alt,
+      shift: partial.shift ?? current.shift,
+      code: (partial as any).code ?? current.code,
+    };
+    const next = { ...keyBindings, [action]: updated } as Record<KeyAction, KeyBinding>;
+    saveKeyBindings(next);
+  };
+  const bindingToString = (b: KeyBinding) => {
+    if (!b || typeof (b as any).code !== 'string' || (b as any).code === 'none') return 'None';
+    const parts: string[] = [];
+    if (b.meta) parts.push('Cmd');
+    if (b.ctrl) parts.push('Ctrl');
+    if (b.alt) parts.push('Alt');
+    if (b.shift) parts.push('Shift');
+    const c = b.code as string;
+    if (c.startsWith('Key')) parts.push(c.slice(3));
+    else if (c.startsWith('Digit')) parts.push(c.slice(5));
+    else parts.push(c);
+    return parts.join('+');
+  };
+  const matchesBinding = (e: KeyboardEvent, b: KeyBinding) => {
+    if (!b || (b as any).code === 'none') return false;
+    return (
+      (!!e.metaKey) === (!!b.meta) &&
+      (!!e.ctrlKey) === (!!b.ctrl) &&
+      (!!e.altKey) === (!!b.alt) &&
+      (!!e.shiftKey) === (!!b.shift) &&
+      (e.code || '').toLowerCase() === b.code.toLowerCase()
+    );
+  };
+  const [showFooterHints, setShowFooterHints] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('plantuml-show-footer-hints');
+      return saved ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isKeybindsOpen, setIsKeybindsOpen] = useState(false);
+
   const [showLeftPanel, setShowLeftPanel] = useState(() => {
     try {
       const saved = localStorage.getItem('plantuml-show-left-panel');
@@ -53,6 +159,26 @@ const Index = () => {
       return true;
     }
   });
+
+  // PlantUML server configuration
+  type ServerMode = 'public' | 'custom';
+  const [plantumlServerMode, setPlantumlServerMode] = useState<ServerMode>(() => {
+    try {
+      return (localStorage.getItem('plantuml-server-mode') as ServerMode) || 'public';
+    } catch {
+      return 'public';
+    }
+  });
+  const [plantumlServerBase, setPlantumlServerBase] = useState<string>(() => {
+    try {
+      return localStorage.getItem('plantuml-server-base') || 'http://localhost:8080/plantuml';
+    } catch {
+      return 'http://localhost:8080/plantuml';
+    }
+  });
+  const normalizedServerBase = (plantumlServerMode === 'custom' ? plantumlServerBase : 'https://www.plantuml.com/plantuml').replace(/\/$/, '');
+
+  // (Recording removed; using simplified dropdown UI)
 
   // Load or create default file
   useEffect(() => {
@@ -119,11 +245,11 @@ const Index = () => {
     setRefreshTrigger((p) => p + 1);
   };
 
-  // PlantUML server status checker (image ping)
+  // PlantUML server status checker (image ping) against configured base
   useEffect(() => {
     const check = () => {
       const encoded = "SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1"; // minimal @startuml..@enduml
-      const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
+      const url = `${normalizedServerBase}/svg/${encoded}`;
       const img = new Image();
       let settled = false;
       const timer = setTimeout(() => {
@@ -144,7 +270,7 @@ const Index = () => {
     check();
     const id = setInterval(check, 30000);
     return () => clearInterval(id);
-  }, []);
+  }, [normalizedServerBase]);
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
@@ -153,8 +279,27 @@ const Index = () => {
       const newShowLeftPanel = !showLeftPanel;
       setShowLeftPanel(newShowLeftPanel);
       localStorage.setItem('plantuml-show-left-panel', JSON.stringify(newShowLeftPanel));
+      return;
     }
-  }, [showLeftPanel]);
+    // Toggle Vim mode (configurable)
+    if (matchesBinding(event, keyBindings.toggleVim)) {
+      event.preventDefault();
+      const next = !vimModeEnabled;
+      setVimModeEnabled(next);
+      try { localStorage.setItem('plantuml-vim-mode', JSON.stringify(next)); } catch {}
+      toast.success(`Vim mode ${next ? 'enabled' : 'disabled'}`);
+      return;
+    }
+    // Toggle layout orientation (configurable)
+    if (matchesBinding(event, keyBindings.toggleLayout)) {
+      event.preventDefault();
+      const next = splitOrientation === 'horizontal' ? 'vertical' : 'horizontal';
+      setSplitOrientation(next);
+      try { localStorage.setItem('split-orientation', next); } catch {}
+      toast.success(`Layout set to ${next === 'horizontal' ? 'Left/Right' : 'Top/Bottom'}`);
+      return;
+    }
+  }, [showLeftPanel, vimModeEnabled, keyBindings, splitOrientation]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -182,6 +327,7 @@ const Index = () => {
                 onChange={setPlantUMLCode}
                 onRefresh={handleRefresh}
                 editorTheme={editorTheme}
+                vimModeEnabled={vimModeEnabled}
                 editorOptions={{
                   renderWhitespace: 'selection',
                   renderIndentGuides: true,
@@ -209,6 +355,7 @@ const Index = () => {
                 plantUMLCode={plantUMLCode} 
                 refreshTrigger={refreshTrigger}
                 onRefresh={handleRefresh}
+                serverBase={normalizedServerBase}
                 fileName={activeFileName}
                 onRenameFile={async (newName) => {
                   if (!activeFileId) return;
@@ -218,11 +365,23 @@ const Index = () => {
               />
             );
             const isVertical = splitOrientation === 'vertical';
+            // showLeftPanel flag means "show editor" across orientations
+            const layoutProps = isVertical
+              ? (
+                  showLeftPanel
+                    ? { leftPanel: viewerEl, rightPanel: editorEl, hideLeftPanel: false as const }
+                    : { leftPanel: null, rightPanel: viewerEl, hideLeftPanel: true as const }
+                )
+              : (
+                  showLeftPanel
+                    ? { leftPanel: editorEl, rightPanel: viewerEl, hideLeftPanel: false as const }
+                    : { leftPanel: null, rightPanel: viewerEl, hideLeftPanel: true as const }
+                );
             return (
               <ResizableLayout
-                leftPanel={isVertical ? viewerEl : (showLeftPanel ? editorEl : null)}
-                rightPanel={isVertical ? editorEl : viewerEl}
-                hideLeftPanel={isVertical ? false : !showLeftPanel}
+                leftPanel={layoutProps.leftPanel}
+                rightPanel={layoutProps.rightPanel}
+                hideLeftPanel={layoutProps.hideLeftPanel}
                 orientation={splitOrientation}
               />
             );
@@ -258,7 +417,11 @@ const Index = () => {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <span>Cmd+K: files • Cmd+J: refresh • Cmd+B: toggle editor</span>
+            {showFooterHints && (
+              <span>
+                Cmd+K: files • Cmd+J: refresh • Cmd+B: toggle editor • Vim: {bindingToString(keyBindings.toggleVim)} • Layout: {bindingToString(keyBindings.toggleLayout)}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -267,6 +430,19 @@ const Index = () => {
               title={isServerOnline ? 'Online' : isServerOnline === false ? 'Offline' : 'Checking...'}
             />
             <span>PlantUML Server {isServerOnline ? 'Online' : isServerOnline === false ? 'Offline' : 'Checking...'}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 px-2 text-xs"
+              title={showLeftPanel ? 'Hide editor panel' : 'Show editor panel'}
+              onClick={() => {
+                const next = !showLeftPanel;
+                setShowLeftPanel(next);
+                try { localStorage.setItem('plantuml-show-left-panel', JSON.stringify(next)); } catch {}
+              }}
+            >
+              {showLeftPanel ? 'Hide Editor' : 'Show Editor'}
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" title="Split orientation">
@@ -278,9 +454,120 @@ const Index = () => {
                 <DropdownMenuItem onClick={() => { setSplitOrientation('vertical'); try { localStorage.setItem('split-orientation','vertical'); } catch {} }}>Top / Bottom</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            <DropdownMenu open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" title="Settings">
+                  <Settings className="w-3 h-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="top" className="w-64">
+                <DropdownMenuItem onClick={() => setIsKeybindsOpen(true)}>
+                  Keyboard Shortcuts…
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5">
+                  <div className="text-[11px] uppercase tracking-wide text-editor-comment mb-1">Renderer</div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <Button size="sm" variant={plantumlServerMode === 'public' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('public'); try { localStorage.setItem('plantuml-server-mode','public'); } catch {} }}>Public</Button>
+                    <Button size="sm" variant={plantumlServerMode === 'custom' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('custom'); try { localStorage.setItem('plantuml-server-mode','custom'); } catch {} }}>Custom</Button>
+                  </div>
+                  {plantumlServerMode === 'custom' && (
+                    <div className="mt-2 space-y-1">
+                      <div className="text-[11px] text-editor-comment">Server base (e.g. http://localhost:8080/plantuml)</div>
+                      <Input
+                        value={plantumlServerBase}
+                        onChange={(e) => { setPlantumlServerBase(e.target.value); try { localStorage.setItem('plantuml-server-base', e.target.value); } catch {} }}
+                        className="h-7 text-xs"
+                        placeholder="http://localhost:8080/plantuml"
+                      />
+                    </div>
+                  )}
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => {
+                  const next = !showFooterHints;
+                  setShowFooterHints(next);
+                  try { localStorage.setItem('plantuml-show-footer-hints', JSON.stringify(next)); } catch {}
+                }}>
+                  {showFooterHints ? 'Hide hints' : 'Show hints'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </footer>
+
+      {/* Keyboard Shortcuts Modal */}
+      <Dialog open={isKeybindsOpen} onOpenChange={setIsKeybindsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Keyboard Shortcuts</DialogTitle>
+            <DialogDescription>Select modifiers and a key. Changes save immediately.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <div className="font-medium">Toggle Vim mode</div>
+                <div className="text-xs text-muted-foreground">Current: {bindingToString(keyBindings.toggleVim)}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="vim-cmd" checked={keyBindings.toggleVim.meta} onCheckedChange={(c) => updateBindingPartial('toggleVim', { meta: !!c })} />
+                  <label htmlFor="vim-cmd" className="text-xs">Cmd</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="vim-alt" checked={keyBindings.toggleVim.alt} onCheckedChange={(c) => updateBindingPartial('toggleVim', { alt: !!c })} />
+                  <label htmlFor="vim-alt" className="text-xs">Alt</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="vim-shift" checked={keyBindings.toggleVim.shift} onCheckedChange={(c) => updateBindingPartial('toggleVim', { shift: !!c })} />
+                  <label htmlFor="vim-shift" className="text-xs">Shift</label>
+                </div>
+                <Select value={keyBindings.toggleVim.code} onValueChange={(v) => updateBindingPartial('toggleVim', { code: v })}>
+                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue placeholder="Key" /></SelectTrigger>
+                  <SelectContent className="text-xs">
+                    {['KeyA','KeyB','KeyC','KeyD','KeyE','KeyF','KeyG','KeyH','KeyI','KeyJ','KeyK','KeyL','KeyM','KeyN','KeyO','KeyP','KeyQ','KeyR','KeyS','KeyT','KeyU','KeyV','KeyW','KeyX','KeyY','KeyZ','Digit0','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Enter','Tab','Space','Backspace'].map(k => (
+                      <SelectItem key={k} value={k}>{k.startsWith('Key') ? k.slice(3) : k.startsWith('Digit') ? k.slice(5) : k}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleVim: { meta:false, ctrl:false, alt:false, shift:false, code:'none' } }; saveKeyBindings(next); }}>Clear</Button>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleVim: defaultKeyBindings.toggleVim }; saveKeyBindings(next); }}>Reset</Button>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <div className="font-medium">Toggle Layout</div>
+                <div className="text-xs text-muted-foreground">Current: {bindingToString(keyBindings.toggleLayout)}</div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="layout-cmd" checked={keyBindings.toggleLayout.meta} onCheckedChange={(c) => updateBindingPartial('toggleLayout', { meta: !!c })} />
+                  <label htmlFor="layout-cmd" className="text-xs">Cmd</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="layout-alt" checked={keyBindings.toggleLayout.alt} onCheckedChange={(c) => updateBindingPartial('toggleLayout', { alt: !!c })} />
+                  <label htmlFor="layout-alt" className="text-xs">Alt</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="layout-shift" checked={keyBindings.toggleLayout.shift} onCheckedChange={(c) => updateBindingPartial('toggleLayout', { shift: !!c })} />
+                  <label htmlFor="layout-shift" className="text-xs">Shift</label>
+                </div>
+                <Select value={keyBindings.toggleLayout.code} onValueChange={(v) => updateBindingPartial('toggleLayout', { code: v })}>
+                  <SelectTrigger className="h-7 w-28 text-xs"><SelectValue placeholder="Key" /></SelectTrigger>
+                  <SelectContent className="text-xs">
+                    {['KeyA','KeyB','KeyC','KeyD','KeyE','KeyF','KeyG','KeyH','KeyI','KeyJ','KeyK','KeyL','KeyM','KeyN','KeyO','KeyP','KeyQ','KeyR','KeyS','KeyT','KeyU','KeyV','KeyW','KeyX','KeyY','KeyZ','Digit0','Digit1','Digit2','Digit3','Digit4','Digit5','Digit6','Digit7','Digit8','Digit9','Enter','Tab','Space','Backspace'].map(k => (
+                      <SelectItem key={k} value={k}>{k.startsWith('Key') ? k.slice(3) : k.startsWith('Digit') ? k.slice(5) : k}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleLayout: { meta:false, ctrl:false, alt:false, shift:false, code:'none' } }; saveKeyBindings(next); }}>Clear</Button>
+                <Button size="sm" variant="ghost" onClick={() => { const next = { ...keyBindings, toggleLayout: defaultKeyBindings.toggleLayout }; saveKeyBindings(next); }}>Reset</Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Editor theme picker moved to footer */}
 
@@ -337,6 +624,15 @@ const Index = () => {
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup heading="Actions">
+              <CommandItem onSelect={() => {
+                const next = !vimModeEnabled;
+                setVimModeEnabled(next);
+                try { localStorage.setItem('plantuml-vim-mode', JSON.stringify(next)); } catch {}
+                setIsFilePaletteOpen(false);
+                toast.success(`Vim mode ${next ? 'enabled' : 'disabled'}`);
+              }}>
+                Toggle Vim mode {vimModeEnabled ? '(On)' : '(Off)'}
+              </CommandItem>
               <CommandItem onSelect={async () => {
                 const created = await createFile('Untitled.puml', '@startuml\n@enduml\n');
                 await handleSelectFile(created.id);

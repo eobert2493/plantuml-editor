@@ -14,9 +14,10 @@ interface DiagramViewerProps {
   refreshTrigger?: number;
   fileName?: string | null;
   onRenameFile?: (newName: string) => Promise<void> | void;
+  serverBase?: string; // e.g. https://www.plantuml.com/plantuml or http://localhost:8080/plantuml
 }
 
-export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileName, onRenameFile }: DiagramViewerProps) => {
+export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileName, onRenameFile, serverBase = 'https://www.plantuml.com/plantuml' }: DiagramViewerProps) => {
   const [diagramUrl, setDiagramUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -154,7 +155,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
             const encoded = plantumlEncoder.encode(section.code);
             return {
               ...section,
-              url: `https://www.plantuml.com/plantuml/svg/${encoded}`
+              url: `${serverBase.replace(/\/$/, '')}/svg/${encoded}`
             };
           })
         );
@@ -181,7 +182,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
         // If desired is sections or stacked, use it; if full, show full
         if (desired === 'full') {
           const encoded = plantumlEncoder.encode(plantUMLCode);
-          setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+          setDiagramUrl(`${serverBase.replace(/\/$/, '')}/svg/${encoded}`);
           setViewMode('full');
         } else if (desired === 'sections') {
           setDiagramUrl(sectionsWithUrls[nextIndex]?.url || '');
@@ -193,7 +194,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       } else {
         // No sections; force full view
         const encoded = plantumlEncoder.encode(plantUMLCode);
-        const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
+        const url = `${serverBase.replace(/\/$/, '')}/svg/${encoded}`;
         setDiagramUrl(url);
         setSections([]);
         setViewMode('full');
@@ -202,7 +203,10 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       
       setLastGeneratedCode(plantUMLCode);
       setNeedsRefresh(false);
-      toast.success("Diagram updated!");
+      // Only toast when this was an explicit refresh (not the very first generation)
+      if (lastGeneratedCode !== "") {
+        toast.success("Diagram updated!");
+      }
     } catch (err) {
       setError("Invalid PlantUML syntax");
       console.error("PlantUML encoding error:", err);
@@ -260,11 +264,11 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       if (sections.length > 0 && viewMode === 'sections') {
         const current = sections[currentSection];
         const encoded = plantumlEncoder.encode(current.code);
-        url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+        url = `${serverBase.replace(/\/$/, '')}/${format}/${encoded}`;
         filename = `${sanitizeFileName(current.name || 'Section')}.${format}`;
       } else {
         const encoded = plantumlEncoder.encode(plantUMLCode);
-        url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+        url = `${serverBase.replace(/\/$/, '')}/${format}/${encoded}`;
         filename = `diagram.${format}`;
       }
       const res = await fetch(url);
@@ -286,7 +290,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       for (let i = 0; i < sections.length; i++) {
         const section = sections[i];
         const encoded = plantumlEncoder.encode(section.code);
-        const url = `https://www.plantuml.com/plantuml/${format}/${encoded}`;
+        const url = `${serverBase.replace(/\/$/, '')}/${format}/${encoded}`;
         const response = await fetch(url);
         const blob = await response.blob();
         const step = String(i + 1).padStart(padWidth, '0');
@@ -322,7 +326,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       const texts: Array<{ name: string; svg: string; size: { width: number; height: number } }> = [];
       for (const section of sections) {
         const encoded = plantumlEncoder.encode(section.code);
-        const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
+        const url = `${serverBase.replace(/\/$/, '')}/svg/${encoded}`;
         const res = await fetch(url);
         const svgText = await res.text();
         const size = getSvgSize(svgText);
@@ -357,7 +361,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       const images: Array<{ png: Uint8Array; width: number; height: number; name: string }> = [];
       for (const section of sections) {
         const encoded = plantumlEncoder.encode(section.code);
-        const url = `https://www.plantuml.com/plantuml/png/${encoded}`;
+        const url = `${serverBase.replace(/\/$/, '')}/png/${encoded}`;
         const res = await fetch(url);
         const blob = await res.blob();
         const arrayBuf = await blob.arrayBuffer();
@@ -408,7 +412,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
     if (mode === 'full') {
       setViewMode('full');
       const encoded = plantumlEncoder.encode(plantUMLCode);
-      setDiagramUrl(`https://www.plantuml.com/plantuml/svg/${encoded}`);
+      setDiagramUrl(`${serverBase.replace(/\/$/, '')}/svg/${encoded}`);
       try { localStorage.setItem('plantuml-view-mode', JSON.stringify('full')); } catch {}
       return;
     }

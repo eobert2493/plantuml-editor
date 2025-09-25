@@ -113,6 +113,9 @@ All colors MUST be HSL.
     --editor-keyword: 217 91% 65%;
     --editor-string: 142 76% 65%;
     --editor-number: 31 100% 70%;
+
+    /* Ensure page gradient matches dark background to avoid light bleed with rounded containers */
+    --gradient-background: linear-gradient(180deg, hsl(222.2 84% 4.9%), hsl(217.2 32.6% 17.5%));
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -17,6 +17,7 @@ interface PlantUMLEditorProps {
   hasSequenceContent?: boolean;
   editorTheme?: 'vs-dark' | 'vs-light' | 'hc-black' | 'plantuml-dark' | 'dracula' | 'monokai' | 'solarized-dark' | 'solarized-light' | 'github-dark' | 'github-light';
   editorOptions?: Partial<monaco.editor.IStandaloneEditorConstructionOptions>;
+  vimModeEnabled?: boolean;
 }
 
 interface CodeSection {
@@ -26,7 +27,7 @@ interface CodeSection {
   icon: string;
 }
 
-export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false, editorTheme = 'plantuml-dark', editorOptions = {} }: PlantUMLEditorProps) => {
+export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false, editorTheme = 'plantuml-dark', editorOptions = {}, vimModeEnabled = false }: PlantUMLEditorProps) => {
   
   // Define code sections
   const codeSections: Record<string, CodeSection> = {
@@ -46,6 +47,11 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
 
   // Removed line count from header to keep UI minimal
 
+
+  // Monaco editor and Vim adapter refs
+  const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
+  const vimAdapterRef = useRef<{ dispose: () => void } | null>(null);
+  const vimStatusRef = useRef<HTMLDivElement | null>(null);
 
   // Parse content based on active tab
   const getDisplayContent = useCallback(() => {
@@ -157,6 +163,7 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
   }, [value, activeTab]);
 
   const handleEditorMount: OnMount = (editor, monacoInstance) => {
+    editorRef.current = editor;
     // Basic PlantUML language registration for Monaco
     const languageId = 'plantuml';
     monacoInstance.languages.register({ id: languageId });
@@ -314,13 +321,50 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
     if (model) monacoInstance.editor.setModelLanguage(model, languageId);
   };
 
+  // Initialize or dispose Vim mode when toggled
+  useEffect(() => {
+    const editor = editorRef.current;
+    // Dispose any existing adapter first if toggling off or re-initializing
+    if (!vimModeEnabled && vimAdapterRef.current) {
+      try { vimAdapterRef.current.dispose(); } catch {}
+      vimAdapterRef.current = null;
+    }
+
+    if (vimModeEnabled && editor) {
+      let cancelled = false;
+      (async () => {
+        try {
+          const mod: any = await import('monaco-vim');
+          if (cancelled) return;
+          const init = (mod && (mod.initVimMode || mod.default?.initVimMode)) || mod?.default || mod?.createVimMode || mod?.init;
+          if (typeof init === 'function') {
+            const statusEl = vimStatusRef.current ?? undefined;
+            const adapter = init(editor, statusEl);
+            // Some variants return { dispose }, others return an object with different shape; keep best-effort
+            if (adapter && typeof adapter.dispose === 'function') {
+              vimAdapterRef.current = adapter;
+            } else {
+              // Fallback no-op disposer
+              vimAdapterRef.current = { dispose: () => {} };
+            }
+          }
+        } catch (e) {
+          // If monaco-vim fails to load, ensure we don't keep a broken state
+          vimAdapterRef.current = null;
+        }
+      })();
+      return () => { cancelled = true; };
+    }
+
+    return () => {};
+  }, [vimModeEnabled]);
+
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'j') {
       event.preventDefault();
       if (onRefresh) {
         onRefresh();
-        toast.success("Diagram refreshed!");
       }
     }
   }, [onRefresh]);
@@ -359,7 +403,10 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
           <FileText className="w-4 h-4 text-editor-keyword" />
           <h3 className="text-sm font-medium text-editor-text">PlantUML Editor</h3>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <div ref={vimStatusRef} className="text-[10px] text-editor-comment min-w-[40px] text-right">
+            {vimModeEnabled ? 'VIM' : ''}
+          </div>
           <Button
             variant="ghost"
             size="sm"
