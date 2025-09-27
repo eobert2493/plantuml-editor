@@ -218,9 +218,11 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
     ];
 
     monacoInstance.languages.registerCompletionItemProvider(languageId, {
-      provideCompletionItems: () => ({
-        suggestions: [...keywordSuggestions, ...snippetSuggestions],
-      }),
+      triggerCharacters: [' ', '\n', '[', '(', '<', ':'],
+      provideCompletionItems: async () => {
+        const suggestions = [...keywordSuggestions, ...snippetSuggestions];
+        return { suggestions };
+      },
     });
 
     // Themes

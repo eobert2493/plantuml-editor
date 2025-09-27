@@ -13,6 +13,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import MarkdownView from "@/components/MarkdownView";
 
 const Index = () => {
   const [plantUMLCode, setPlantUMLCode] = useState("@startuml\n@enduml\n");
@@ -50,15 +52,10 @@ const Index = () => {
   type KeyAction = 'toggleVim' | 'toggleLayout' | 'openFiles' | 'refresh' | 'toggleEditor';
   type KeyBinding = { meta: boolean; ctrl: boolean; alt: boolean; shift: boolean; code: string };
   const defaultKeyBindings: Record<KeyAction, KeyBinding> = {
-    // Default Vim toggle (mac): Cmd+Shift+V
     toggleVim: { meta: true, ctrl: false, alt: false, shift: true, code: 'KeyV' },
-    // Default Layout toggle: Cmd+I
     toggleLayout: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyI' },
-    // Default Open Files palette: Cmd+K
     openFiles: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyK' },
-    // Default Refresh diagram: Cmd+J
     refresh: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyJ' },
-    // Default Toggle editor: Cmd+B
     toggleEditor: { meta: true, ctrl: false, alt: false, shift: false, code: 'KeyB' },
   };
   const [keyBindings, setKeyBindings] = useState<Record<KeyAction, KeyBinding>>(() => {
@@ -109,7 +106,7 @@ const Index = () => {
     const current = keyBindings[action];
     const updated: KeyBinding = {
       meta: partial.meta ?? current.meta,
-      ctrl: false, // ctrl not configurable in simplified UI
+      ctrl: false,
       alt: partial.alt ?? current.alt,
       shift: partial.shift ?? current.shift,
       code: (partial as any).code ?? current.code,
@@ -151,6 +148,65 @@ const Index = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isKeybindsOpen, setIsKeybindsOpen] = useState(false);
 
+  // Right pane: markdown content by id (from ' md:<id>:' comment blocks)
+  const [activePaneId, setActivePaneId] = useState<string | null>(null);
+  const [activePaneTitle, setActivePaneTitle] = useState<string>("");
+  const [activePaneMarkdown, setActivePaneMarkdown] = useState<string>("");
+
+  // Parse markdown blocks. Supported syntaxes:
+  // 1) Single-line comments wrapper:
+  //    ' md:<id>: Optional Title
+  //    ' Markdown line 1
+  //    ' Markdown line 2
+  //    ' /md
+  // 2) PlantUML block comments wrapper for easier multiline:
+  //    /' md:<id>: Optional Title
+  //    Markdown line 1
+  //    Markdown line 2
+  //    '/
+  const parseMarkdownBlocks = useCallback((code: string) => {
+    const lines = code.split('\n');
+    const blocks: Record<string, { title: string; body: string }> = {};
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const startBlock = line.match(/^\/'\s*md:([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
+      if (startBlock) {
+        const id = startBlock[1];
+        const title = (startBlock[2] || '').trim();
+        i += 1;
+        const bodyLines: string[] = [];
+        while (i < lines.length && !/^'\s*\/$/.test(lines[i])) {
+          bodyLines.push(lines[i]);
+          i += 1;
+        }
+        blocks[id] = { title, body: bodyLines.join('\n') };
+        i += 1;
+        continue;
+      }
+      const startLine = line.match(/^'\s*md:([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
+      if (startLine) {
+        const id = startLine[1];
+        const title = (startLine[2] || '').trim();
+        i += 1;
+        const bodyLines: string[] = [];
+        while (i < lines.length && !/^'\s*\/md\s*$/.test(lines[i])) {
+          const l = lines[i];
+          const mdLine = l.replace(/^'\s?/, "");
+          bodyLines.push(mdLine);
+          i += 1;
+        }
+        blocks[id] = { title, body: bodyLines.join('\n') };
+        i += 1;
+        continue;
+      }
+      i += 1;
+    }
+    return blocks;
+  }, []);
+
+  const markdownBlocks = parseMarkdownBlocks(plantUMLCode);
+
   const [showLeftPanel, setShowLeftPanel] = useState(() => {
     try {
       const saved = localStorage.getItem('plantuml-show-left-panel');
@@ -169,7 +225,6 @@ const Index = () => {
     }
   });
 
-  // PlantUML server configuration
   type ServerMode = 'public' | 'custom';
   const [plantumlServerMode, setPlantumlServerMode] = useState<ServerMode>(() => {
     try {
@@ -187,9 +242,6 @@ const Index = () => {
   });
   const normalizedServerBase = (plantumlServerMode === 'custom' ? plantumlServerBase : 'https://www.plantuml.com/plantuml').replace(/\/$/, '');
 
-  // (Recording removed; using simplified dropdown UI)
-
-  // Load or create default file
   useEffect(() => {
     (async () => {
       const file = await ensureDefault(plantUMLCode);
@@ -198,12 +250,8 @@ const Index = () => {
       setPlantUMLCode(file.content);
       setRefreshTrigger((p) => p + 1);
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // File palette is now opened via configurable keybinding (see handleKeyDown)
-
-  // Apply page theme to html element
   useEffect(() => {
     const root = document.documentElement;
     if (pageTheme === 'dark') {
@@ -218,7 +266,6 @@ const Index = () => {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  // Debounced autosave
   useEffect(() => {
     if (!activeFileId) return;
     const handle = setTimeout(async () => {
@@ -240,10 +287,9 @@ const Index = () => {
     setRefreshTrigger((p) => p + 1);
   };
 
-  // PlantUML server status checker (image ping) against configured base
   useEffect(() => {
     const check = () => {
-      const encoded = "SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1"; // minimal @startuml..@enduml
+      const encoded = "SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1";
       const url = `${normalizedServerBase}/svg/${encoded}`;
       const img = new Image();
       let settled = false;
@@ -267,9 +313,7 @@ const Index = () => {
     return () => clearInterval(id);
   }, [normalizedServerBase]);
 
-  // Handle keyboard shortcuts
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
-    // Toggle editor panel (configurable)
     if (matchesBinding(event, keyBindings.toggleEditor)) {
       event.preventDefault();
       const newShowLeftPanel = !showLeftPanel;
@@ -277,7 +321,6 @@ const Index = () => {
       try { localStorage.setItem('plantuml-show-left-panel', JSON.stringify(newShowLeftPanel)); } catch {}
       return;
     }
-    // Toggle Vim mode (configurable)
     if (matchesBinding(event, keyBindings.toggleVim)) {
       event.preventDefault();
       const next = !vimModeEnabled;
@@ -286,7 +329,6 @@ const Index = () => {
       toast.success(`Vim mode ${next ? 'enabled' : 'disabled'}`);
       return;
     }
-    // Toggle layout orientation (configurable)
     if (matchesBinding(event, keyBindings.toggleLayout)) {
       event.preventDefault();
       const next = splitOrientation === 'horizontal' ? 'vertical' : 'horizontal';
@@ -295,7 +337,6 @@ const Index = () => {
       toast.success(`Layout set to ${next === 'horizontal' ? 'Left/Right' : 'Top/Bottom'}`);
       return;
     }
-    // Open files palette (configurable)
     if (matchesBinding(event, keyBindings.openFiles)) {
       event.preventDefault();
       setIsFilePaletteOpen(true);
@@ -305,7 +346,6 @@ const Index = () => {
       })();
       return;
     }
-    // Refresh diagram (configurable)
     if (matchesBinding(event, keyBindings.refresh)) {
       event.preventDefault();
       handleRefresh();
@@ -342,7 +382,6 @@ const Index = () => {
                 vimModeEnabled={vimModeEnabled}
                 editorOptions={{
                   renderWhitespace: 'selection',
-                  // Indentation guides are enabled via `guides.indentation`
                   guides: { indentation: true, bracketPairs: true },
                   cursorBlinking: 'smooth',
                   cursorSmoothCaretAnimation: 'on',
@@ -352,7 +391,6 @@ const Index = () => {
                   bracketPairColorization: { enabled: true },
                   formatOnPaste: false,
                   formatOnType: false,
-                  // Rely on Monaco defaults for occurrences/selection highlighting
                   wordBasedSuggestions: 'allDocuments',
                   quickSuggestions: { other: true, comments: false, strings: true },
                   folding: true,
@@ -373,10 +411,33 @@ const Index = () => {
                   await renameFile(activeFileId, newName);
                   setActiveFileName(newName);
                 }}
+                onPaneLinkClick={(paneId) => {
+                  const blk = markdownBlocks[paneId];
+                  setActivePaneId(paneId);
+                  setActivePaneTitle(blk?.title || paneId);
+                  setActivePaneMarkdown(blk?.body || `No markdown found for "${paneId}".`);
+                }}
               />
             );
+            const viewerInline = (
+              <div className="h-full flex flex-col">
+                {viewerEl}
+                {activePaneId && (
+                  <div className="mt-2 mx-4 mb-4 border border-editor-border rounded-lg overflow-hidden bg-editor-panel">
+                    <div className="px-3 py-2 border-b border-editor-border flex items-center justify-between">
+                      <div className="text-sm font-medium text-editor-text truncate">{activePaneTitle}</div>
+                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setActivePaneId(null)}>Close</Button>
+                    </div>
+                    <div className="p-4">
+                      <div className="prose prose-invert max-w-none text-sm">
+                        <MarkdownView markdown={activePaneMarkdown} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
             const isVertical = splitOrientation === 'vertical';
-            // showLeftPanel flag means "show editor" across orientations
             const layoutProps = isVertical
               ? (
                   showLeftPanel
@@ -385,8 +446,8 @@ const Index = () => {
                 )
               : (
                   showLeftPanel
-                    ? { leftPanel: editorEl, rightPanel: viewerEl, hideLeftPanel: false as const }
-                    : { leftPanel: null, rightPanel: viewerEl, hideLeftPanel: true as const }
+                    ? { leftPanel: editorEl, rightPanel: viewerInline, hideLeftPanel: false as const }
+                    : { leftPanel: null, rightPanel: viewerInline, hideLeftPanel: true as const }
                 );
             return (
               <ResizableLayout
@@ -394,6 +455,7 @@ const Index = () => {
                 rightPanel={layoutProps.rightPanel}
                 hideLeftPanel={layoutProps.hideLeftPanel}
                 orientation={splitOrientation}
+                storageKeyPrefix="plantuml-outer"
               />
             );
           })()}
@@ -435,36 +497,67 @@ const Index = () => {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span
-              className={`inline-block w-2 h-2 rounded-full ${isServerOnline ? 'bg-green-500' : isServerOnline === false ? 'bg-red-500' : 'bg-gray-400'} border border-editor-border`}
-              aria-label={isServerOnline ? 'PlantUML server online' : isServerOnline === false ? 'PlantUML server offline' : 'PlantUML server status unknown'}
-              title={isServerOnline ? 'Online' : isServerOnline === false ? 'Offline' : 'Checking...'}
-            />
-            <span>PlantUML Server {isServerOnline ? 'Online' : isServerOnline === false ? 'Offline' : 'Checking...'}</span>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-6 px-2 text-xs"
-              title={showLeftPanel ? 'Hide editor panel' : 'Show editor panel'}
-              onClick={() => {
-                const next = !showLeftPanel;
-                setShowLeftPanel(next);
-                try { localStorage.setItem('plantuml-show-left-panel', JSON.stringify(next)); } catch {}
-              }}
-            >
-              {showLeftPanel ? 'Hide Editor' : 'Show Editor'}
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" title="Split orientation">
-                  {splitOrientation === 'horizontal' ? 'Left/Right' : 'Top/Bottom'}
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => { setSplitOrientation('horizontal'); try { localStorage.setItem('split-orientation','horizontal'); } catch {} }}>Left / Right</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setSplitOrientation('vertical'); try { localStorage.setItem('split-orientation','vertical'); } catch {} }}>Top / Bottom</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    className={`inline-block w-2 h-2 rounded-full ${isServerOnline ? 'bg-green-500' : isServerOnline === false ? 'bg-red-500' : 'bg-gray-400'} border border-editor-border`}
+                    aria-label={isServerOnline ? 'PlantUML server online' : isServerOnline === false ? 'PlantUML server offline' : 'PlantUML server status unknown'}
+                  />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-xs">Renderer status: {isServerOnline ? 'Online' : isServerOnline === false ? 'Offline' : 'Checking…'}</div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-xs">
+                    {plantumlServerMode === 'public' ? 'Public' : 'Custom'}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-xs max-w-[260px]">
+                    {plantumlServerMode === 'public'
+                      ? 'Using the public PlantUML server (https://www.plantuml.com/plantuml). This is best for quick previews.'
+                      : `Using a custom PlantUML server at ${plantumlServerBase}. Useful for offline or self-hosted rendering.`}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 w-6 p-0 rounded text-editor-comment hover:text-editor-text hover:bg-editor-background"
+                    title={splitOrientation === 'horizontal' ? 'Switch to Top/Bottom' : 'Switch to Left/Right'}
+                    aria-label={splitOrientation === 'horizontal' ? 'Switch to Top/Bottom' : 'Switch to Left/Right'}
+                    onClick={() => {
+                      const next = splitOrientation === 'horizontal' ? 'vertical' : 'horizontal';
+                      setSplitOrientation(next);
+                      try { localStorage.setItem('split-orientation', next); } catch {}
+                    }}
+                  >
+                    <span className="inline-flex items-center justify-center w-6 h-6">
+                      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" className="block">
+                        <rect x="1.5" y="1.5" width="13" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                        {splitOrientation === 'horizontal' ? (
+                          <line x1="8" y1="3" x2="8" y2="13" stroke="currentColor" strokeWidth="1.5" />
+                        ) : (
+                          <line x1="3" y1="8" x2="13" y2="8" stroke="currentColor" strokeWidth="1.5" />
+                        )}
+                      </svg>
+                    </span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-xs">{splitOrientation === 'horizontal' ? 'Switch to Top/Bottom' : 'Switch to Left/Right'}</div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <DropdownMenu open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" title="Settings">
@@ -507,6 +600,8 @@ const Index = () => {
           </div>
         </div>
       </footer>
+
+      {/* Removed drawer sheet; right pane is inline below viewer */}
 
       {/* Keyboard Shortcuts Modal */}
       <Dialog open={isKeybindsOpen} onOpenChange={setIsKeybindsOpen}>
@@ -707,7 +802,6 @@ const Index = () => {
                         const list = await listFiles();
                         setFilesForPalette(list.map(ff => ({ id: ff.id, name: ff.name, updatedAt: ff.updatedAt })));
                         if (activeFileId === f.id) {
-                          // If we deleted the active file, switch to the most recent one
                           if (list.length > 0) {
                             await handleSelectFile(list[0].id);
                           } else {

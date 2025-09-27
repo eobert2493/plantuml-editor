@@ -127,4 +127,31 @@ All colors MUST be HSL.
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Themed scrollbars */
+  .scrollbar-themed {
+    scrollbar-width: auto; /* slightly thicker */
+    scrollbar-color: hsl(var(--editor-comment)) hsl(var(--editor-panel));
+  }
+  /* Ensure color input popover is not clipped by overflow containers */
+  input[type="color"] {
+    position: relative;
+    z-index: 10;
+  }
+  .scrollbar-themed::-webkit-scrollbar {
+    width: 14px;  /* wider */
+    height: 14px;
+  }
+  .scrollbar-themed::-webkit-scrollbar-track {
+    background: hsl(var(--editor-panel));
+    border-left: 1px solid hsl(var(--editor-border));
+  }
+  .scrollbar-themed::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--editor-comment));
+    border-radius: 10px;
+    border: 3px solid hsl(var(--editor-panel)); /* creates padding/gap */
+  }
+  .scrollbar-themed::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--editor-text));
+  }
 }

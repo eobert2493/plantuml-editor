@@ -7,13 +7,14 @@ interface ResizableLayoutProps {
   className?: string;
   hideLeftPanel?: boolean;
   orientation?: 'horizontal' | 'vertical'; // horizontal: left/right, vertical: top/bottom
+  storageKeyPrefix?: string; // to avoid collisions when nesting
 }
 
-export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false, orientation = 'horizontal' }: ResizableLayoutProps) => {
+export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPanel = false, orientation = 'horizontal', storageKeyPrefix = 'plantuml' }: ResizableLayoutProps) => {
   // Track primary pane size in pixels to avoid layout shifts on content changes
   const [primarySizePx, setPrimarySizePx] = useState<number>(() => {
     try {
-      const key = orientation === 'horizontal' ? 'plantuml-left-width-px' : 'plantuml-top-height-px';
+      const key = orientation === 'horizontal' ? `${storageKeyPrefix}-left-width-px` : `${storageKeyPrefix}-top-height-px`;
       const savedPx = localStorage.getItem(key);
       if (savedPx) return JSON.parse(savedPx);
       return -1; // will be initialized after mount
@@ -39,16 +40,16 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
       const max = rect.width * 0.8;
       const clamped = Math.max(min, Math.min(max, proposed));
       setPrimarySizePx(clamped);
-      try { localStorage.setItem('plantuml-left-width-px', JSON.stringify(clamped)); } catch {}
+      try { localStorage.setItem(`${storageKeyPrefix}-left-width-px`, JSON.stringify(clamped)); } catch {}
     } else {
       const proposed = e.clientY - rect.top;
       const min = rect.height * 0.2;
       const max = rect.height * 0.8;
       const clamped = Math.max(min, Math.min(max, proposed));
       setPrimarySizePx(clamped);
-      try { localStorage.setItem('plantuml-top-height-px', JSON.stringify(clamped)); } catch {}
+      try { localStorage.setItem(`${storageKeyPrefix}-top-height-px`, JSON.stringify(clamped)); } catch {}
     }
-  }, [isDragging, orientation]);
+  }, [isDragging, orientation, storageKeyPrefix]);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
@@ -84,17 +85,32 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
     let initialPx = (orientation === 'horizontal' ? rect.width : rect.height) * 0.5;
     // Migrate from old percent if present
     try {
-      const savedPercent = localStorage.getItem('plantuml-left-width');
+      const savedPercent = localStorage.getItem(`${storageKeyPrefix}-left-width`);
       if (savedPercent && orientation === 'horizontal') {
         initialPx = (JSON.parse(savedPercent) as number) / 100 * rect.width;
       }
     } catch {}
     setPrimarySizePx(initialPx);
     try {
-      const key = orientation === 'horizontal' ? 'plantuml-left-width-px' : 'plantuml-top-height-px';
+      const key = orientation === 'horizontal' ? `${storageKeyPrefix}-left-width-px` : `${storageKeyPrefix}-top-height-px`;
       localStorage.setItem(key, JSON.stringify(initialPx));
     } catch {}
-  }, [primarySizePx, orientation]);
+  }, [primarySizePx, orientation, storageKeyPrefix]);
+
+  // When orientation changes, load previously saved size for that orientation
+  useEffect(() => {
+    if (!containerRef.current) return;
+    try {
+      const key = orientation === 'horizontal' ? `${storageKeyPrefix}-left-width-px` : `${storageKeyPrefix}-top-height-px`;
+      const savedPxRaw = localStorage.getItem(key);
+      const rect = containerRef.current.getBoundingClientRect();
+      const defaultPx = (orientation === 'horizontal' ? rect.width : rect.height) * 0.5;
+      const nextPx = savedPxRaw ? Math.max(40, Math.min((orientation === 'horizontal' ? rect.width : rect.height) * 0.8, JSON.parse(savedPxRaw))) : defaultPx;
+      setPrimarySizePx(nextPx);
+    } catch {
+      // ignore
+    }
+  }, [orientation, storageKeyPrefix]);
 
   return (
     <div 
@@ -123,16 +139,16 @@ export const ResizableLayout = ({ leftPanel, rightPanel, className, hideLeftPane
         <div
           className={cn(
             orientation === 'horizontal'
-              ? "w-1 bg-editor-border hover:bg-primary cursor-col-resize flex-shrink-0 transition-colors relative group"
-              : "h-1 bg-editor-border hover:bg-primary cursor-row-resize flex-shrink-0 transition-colors relative group",
-            isDragging && "bg-primary"
+              ? "w-1 bg-editor-border hover:bg-[hsl(var(--editor-keyword))] cursor-col-resize flex-shrink-0 transition-colors relative group"
+              : "h-1 bg-editor-border hover:bg-[hsl(var(--editor-keyword))] cursor-row-resize flex-shrink-0 transition-colors relative group",
+            isDragging && "bg-[hsl(var(--editor-keyword))]"
           )}
           onMouseDown={handleMouseDown}
         >
           {/* Visual indicator on hover */}
           <div className={cn(
             orientation === 'horizontal' ? "absolute inset-y-0 -left-1 -right-1" : "absolute inset-x-0 -top-1 -bottom-1",
-            "group-hover:bg-primary/20 transition-colors"
+            "group-hover:bg-[hsla(var(--editor-keyword),0.2)] transition-colors"
           )} />
         </div>
       )}

@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { RefreshCw, Download, Maximize2, Eye, Zap, ChevronLeft, ChevronRight, Grid3X3, Layers } from "lucide-react";
+import { RefreshCw, Download, Maximize2, Eye, Zap, ChevronLeft, ChevronRight, Grid3X3, Layers, Mouse } from "lucide-react";
 import { PDFDocument, rgb } from "pdf-lib";
 import * as plantumlEncoder from "plantuml-encoder";
 
@@ -15,9 +15,10 @@ interface DiagramViewerProps {
   fileName?: string | null;
   onRenameFile?: (newName: string) => Promise<void> | void;
   serverBase?: string; // e.g. https://www.plantuml.com/plantuml or http://localhost:8080/plantuml
+  onPaneLinkClick?: (paneId: string) => void;
 }
 
-export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileName, onRenameFile, serverBase = 'https://www.plantuml.com/plantuml' }: DiagramViewerProps) => {
+export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileName, onRenameFile, serverBase = 'https://www.plantuml.com/plantuml', onPaneLinkClick }: DiagramViewerProps) => {
   const [diagramUrl, setDiagramUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -25,6 +26,37 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [sections, setSections] = useState<Array<{name: string, code: string, url: string}>>([]);
   const [currentSection, setCurrentSection] = useState(0);
+  const [svgHtml, setSvgHtml] = useState<string>("");
+  const svgContainerRef = useRef<HTMLDivElement>(null);
+  const [previewBg, setPreviewBg] = useState<string>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('plantuml-preview-bg') || '"#ffffff"');
+    } catch {
+      return '#ffffff';
+    }
+  });
+  const [zoom, setZoom] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('plantuml-preview-zoom');
+      return saved ? JSON.parse(saved) : 1;
+    } catch {
+      return 1;
+    }
+  });
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const clampZoom = (z: number) => Math.min(3, Math.max(0.25, z));
+  const setZoomPersist = (z: number) => {
+    const v = clampZoom(z);
+    setZoom(v);
+    try { localStorage.setItem('plantuml-preview-zoom', JSON.stringify(v)); } catch {}
+  };
+
+  // Space+drag panning when zoomed in
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const [isPreviewHovered, setIsPreviewHovered] = useState(false);
   const [viewMode, setViewMode] = useState<'full' | 'sections' | 'stacked'>(() => {
     try {
       const saved = localStorage.getItem('plantuml-view-mode');
@@ -413,6 +445,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       setViewMode('full');
       const encoded = plantumlEncoder.encode(plantUMLCode);
       setDiagramUrl(`${serverBase.replace(/\/$/, '')}/svg/${encoded}`);
+      setSvgHtml("");
       try { localStorage.setItem('plantuml-view-mode', JSON.stringify('full')); } catch {}
       return;
     }
@@ -421,12 +454,132 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       setViewMode(mode);
       if (mode === 'sections') {
         setDiagramUrl(sections[currentSection]?.url || '');
+        setSvgHtml("");
       } else if (mode === 'stacked') {
         setDiagramUrl(''); // Not needed for stacked view
+        setSvgHtml("");
       }
       try { localStorage.setItem('plantuml-view-mode', JSON.stringify(mode)); } catch {}
     }
   };
+
+  // Fetch SVG text for inline rendering when showing a single image (full/sections)
+  useEffect(() => {
+    let cancelled = false;
+    const shouldInline = !!diagramUrl && (viewMode === 'full' || viewMode === 'sections');
+    if (!shouldInline) return;
+    (async () => {
+      try {
+        const res = await fetch(diagramUrl);
+        const text = await res.text();
+        if (!cancelled) setSvgHtml(text);
+      } catch (e) {
+        if (!cancelled) setSvgHtml('');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [diagramUrl, viewMode]);
+
+  // After SVG HTML is injected, normalize sizing and wire link clicks
+  useEffect(() => {
+    const root = svgContainerRef.current;
+    if (!root || !svgHtml) return;
+    // Ensure SVG scales to container width
+    const svg = root.querySelector('svg');
+    if (svg) {
+      (svg as SVGElement).setAttribute('style', 'max-width: 100%; height: auto;');
+    }
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const anchor = target.closest('a') as HTMLAnchorElement | SVGAElement | null;
+      if (!anchor) return;
+      const href = (anchor as any).getAttribute('href') || (anchor as any).getAttribute('xlink:href');
+      if (typeof href === 'string' && href.startsWith('pane:')) {
+        e.preventDefault();
+        const paneId = href.slice('pane:'.length);
+        if (onPaneLinkClick) onPaneLinkClick(paneId);
+      }
+    };
+    root.addEventListener('click', onClick);
+    return () => root.removeEventListener('click', onClick);
+  }, [svgHtml, onPaneLinkClick]);
+
+  // Ctrl/Cmd + mouse wheel zoom inside preview
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const delta = e.deltaY;
+        const next = zoom + (delta > 0 ? -0.1 : 0.1);
+        setZoomPersist(next);
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel as any);
+  }, [zoom]);
+
+  // Manage space key state
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return;
+      const target = e.target as HTMLElement | null;
+      // Never interfere with typing in inputs/editors
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+        return;
+      }
+      if (isPreviewHovered && zoom > 1) {
+        setIsSpacePressed(true);
+        e.preventDefault();
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === 'Space') {
+        setIsSpacePressed(false);
+        setIsPanning(false);
+        panStartRef.current = null;
+      }
+    };
+    document.addEventListener('keydown', down);
+    document.addEventListener('keyup', up);
+    return () => {
+      document.removeEventListener('keydown', down);
+      document.removeEventListener('keyup', up);
+    };
+  }, [zoom, isPreviewHovered]);
+
+  // Mouse drag to pan when space held and zoomed in
+  useEffect(() => {
+    const area = scrollAreaRef.current;
+    if (!area) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (!isSpacePressed || zoom <= 1) return;
+      setIsPanning(true);
+      panStartRef.current = { x: e.clientX, y: e.clientY, left: area.scrollLeft, top: area.scrollTop };
+      e.preventDefault();
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isPanning || !panStartRef.current) return;
+      const dx = e.clientX - panStartRef.current.x;
+      const dy = e.clientY - panStartRef.current.y;
+      area.scrollLeft = panStartRef.current.left - dx;
+      area.scrollTop = panStartRef.current.top - dy;
+    };
+    const onMouseUp = () => {
+      setIsPanning(false);
+      panStartRef.current = null;
+    };
+    area.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    return () => {
+      area.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+  }, [isSpacePressed, isPanning, zoom]);
 
   return (
     <Card className="h-full bg-editor-panel border-editor-border flex flex-col">
@@ -434,11 +587,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
         <div className="flex items-center gap-2">
           <Eye className="w-4 h-4 text-editor-keyword" />
           <h3 className="text-sm font-medium text-editor-text">Diagram Preview</h3>
-          
-          {/* Section navigation moved out of header to preview area */}
-          
-          
-          
+          {/* filename shown in centered overlay */}
           {needsRefresh && !isLoading && (
             <div className="flex items-center gap-1 text-xs text-amber-400">
               <Zap className="w-3 h-3" />
@@ -451,6 +600,22 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
         </div>
         
         <div className="flex items-center gap-1">
+          {/* Background color picker */}
+          <div className="hidden md:flex items-center mr-2 relative z-10">
+            <input
+              type="color"
+              title="Preview background"
+              value={previewBg}
+              onChange={(e) => {
+                const val = e.target.value || '#ffffff';
+                setPreviewBg(val);
+                try { localStorage.setItem('plantuml-preview-bg', JSON.stringify(val)); } catch {}
+              }}
+              className="w-7 h-7 p-0 border border-editor-border rounded bg-transparent cursor-pointer appearance-none"
+              style={{ WebkitAppearance: 'none' as any }}
+            />
+          </div>
+          {/* Zoom controls removed per request */}
           {/* View mode toggle - desktop */}
           <div className="hidden md:flex items-center gap-1 mr-2">
             <Button
@@ -543,7 +708,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
           </DropdownMenu>
         </div>
 
-        {/* Truly centered file name overlay */}
+        {/* Centered file name overlay */}
         <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
           <div className="text-center max-w-[60%] pointer-events-auto">
             <div className="text-sm text-editor-text truncate">
@@ -567,6 +732,8 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
                         setIsRenaming(false);
                       }
                     }}
+                    size={Math.max(1, renameBase.length)}
+                    size={Math.max(1, renameBase.length)}
                     className="bg-editor-background border border-editor-border rounded px-2 py-1 text-sm outline-none ring-1 ring-primary/30"
                     placeholder="File name"
                   />
@@ -593,7 +760,20 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto bg-editor-background">
+      <div
+        ref={scrollAreaRef}
+        className="flex-1 overflow-auto bg-editor-background scrollbar-themed pr-3"
+        style={{ backgroundColor: previewBg }}
+        onMouseEnter={() => setIsPreviewHovered(true)}
+        onMouseLeave={() => { setIsPreviewHovered(false); setIsPanning(false); panStartRef.current = null; }}
+      >
+        {isSpacePressed && isPreviewHovered && zoom > 1 && (
+          <div className="sticky top-2 z-10 flex justify-end px-4 pointer-events-none">
+            <div className="bg-editor-panel/80 border border-editor-border rounded px-2 py-1 text-editor-comment flex items-center">
+              <Mouse className="w-3 h-3" />
+            </div>
+          </div>
+        )}
         {error ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
@@ -623,7 +803,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
                     {/* Index displayed below may be off if names duplicate */}
                   </p>
                 </div>
-                <div className="p-4 bg-editor-background flex justify-center">
+                <div className="p-4 flex justify-center" style={{ backgroundColor: previewBg }}>
                   <img
                     src={section.url}
                     alt={`Section: ${section.name}`}
@@ -672,27 +852,47 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
                       </Button>
                     </div>
                   </div>
-                  <div className="p-4 bg-editor-background">
-                    <div className="w-full flex justify-center">
-                      <img
-                        src={diagramUrl}
-                        alt="PlantUML Diagram"
+                <div className="p-4" style={{ backgroundColor: previewBg }}>
+                  <div className="w-full flex justify-center">
+                      {svgHtml ? (
+                      <div
+                          ref={svgContainerRef}
                         className="max-w-full h-auto rounded-md"
-                        onError={() => setError("Failed to load diagram")}
-                        style={{ maxWidth: '100%', height: 'auto' }}
-                      />
+                        style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', display: 'inline-block' }}
+                        dangerouslySetInnerHTML={{ __html: svgHtml }}
+                        />
+                      ) : (
+                      <img
+                          src={diagramUrl}
+                          alt="PlantUML Diagram"
+                        className="max-w-full h-auto rounded-md"
+                        style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+                          onError={() => setError("Failed to load diagram")}
+                        
+                        />
+                      )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="w-full flex justify-center">
-                  <img
-                    src={diagramUrl}
-                    alt="PlantUML Diagram"
-                    className="max-w-full h-auto rounded-md"
-                    onError={() => setError("Failed to load diagram")}
-                    style={{ maxWidth: '100%', height: 'auto' }}
-                  />
+                <div className={`w-full flex justify-center ${isSpacePressed && zoom > 1 ? (isPanning ? 'cursor-grabbing' : 'cursor-grab') : ''}`} style={{ backgroundColor: previewBg }}>
+                  {svgHtml ? (
+                    <div
+                      ref={svgContainerRef}
+                      className="max-w-full h-auto rounded-md"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: 'top left', display: 'inline-block' }}
+                      dangerouslySetInnerHTML={{ __html: svgHtml }}
+                    />
+                  ) : (
+                    <img
+                      src={diagramUrl}
+                      alt="PlantUML Diagram"
+                      className="max-w-full h-auto rounded-md"
+                      style={{ transform: `scale(${zoom})`, transformOrigin: 'top left' }}
+                      onError={() => setError("Failed to load diagram")}
+                      
+                    />
+                  )}
                 </div>
               )}
             </div>
