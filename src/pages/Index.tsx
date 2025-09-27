@@ -17,7 +17,111 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import MarkdownView from "@/components/MarkdownView";
 
 const Index = () => {
-  const [plantUMLCode, setPlantUMLCode] = useState("@startuml\n@enduml\n");
+  const [plantUMLCode, setPlantUMLCode] = useState(`@startuml
+title Sequence Demo with Section Viewsasdfsdf
+
+' Common lifelines
+actor User
+participant "UI/Web App" as UI
+participant "API Gateway" as APIGW
+participant "Auth Service" as Auth
+participant "App Service" as App
+database "DB" as DB
+queue "Event Bus" as Bus
+participant "Email/SMS" as Notify
+
+== System Overview ==
+User -> UI : Clicks "Place Order"
+UI -> APIGW : POST /orders
+activate APIGW
+APIGW -> Auth : Validate token
+Auth --> APIGW : 200 OK (claims)
+APIGW -> App : createOrder(request, claims)
+activate App
+App -> DB : INSERT order
+DB --> App : orderId
+App --> APIGW : 201 Created (orderId)
+deactivate App
+APIGW --> UI : 201 Created (orderId)
+deactivate APIGW
+UI --> User : Show confirmation
+
+== Authentication Detail ==
+group Token missing
+  UI -> Auth : /oauth/authorize
+  Auth --> UI : redirect(login)
+  User -> Auth : submit credentials
+  Auth --> UI : redirect with code
+  UI -> Auth : /oauth/token (code)
+  Auth --> UI : {access_token}
+end
+
+== Business Logic Breakdown ==
+UI -> APIGW : POST /orders
+APIGW -> App : createOrder(...)
+activate App
+App -> App : validateRequest()
+alt Inventory available
+  App -> DB : SELECT stock
+  DB --> App : qty
+  App -> DB : UPDATE reserve qty
+else Out of stock
+  App --> APIGW : 409 Conflict
+  APIGW --> UI : 409 Conflict
+  deactivate App
+  return
+end
+
+== Data Access (DAO) ==
+App -> DB : BEGIN
+App -> DB : INSERT orders(...)
+App -> DB : INSERT order_items(...)
+App -> DB : COMMIT
+DB --> App : OK
+
+== Async Notifications ==
+App -> Bus ++ : publish OrderCreated(orderId)
+Bus -> Notify : deliver event
+activate Notify
+Notify -> User : send email/sms
+deactivate Notify
+App --> APIGW : 201 Created
+APIGW --> UI : 201 Created
+
+== Error & Retry ==
+par Primary path
+  UI -> APIGW : GET /orders/{id}
+  APIGW -> App : fetchOrder(id)
+  App -> DB : SELECT order by id
+  DB --> App : row
+  App --> APIGW : 200 OK
+  APIGW --> UI : 200 OK
+else DB timeout
+  App -> DB : SELECT ...
+  DB --> App : timeout
+  App --> APIGW : 503 Service Unavailable
+  APIGW --> UI : 503 Service Unavailable
+  loop retry x3 with backoff
+    App -> DB : SELECT ...
+  end
+end
+
+== Cancellations & Lifeline Control ==
+UI -> APIGW : DELETE /orders/{id}
+APIGW -> App : cancelOrder(id)
+activate App
+App -> DB : UPDATE orders SET status='CANCELLED'
+DB --> App : OK
+destroy App
+App --> APIGW : 204 No Content
+APIGW --> UI : 204 No Content
+
+== Cross-Diagram Reference ==
+ref over APIGW,Auth : See "Authentication Detail" for token issuance
+ref over App,DB : See "Data Access (DAO)" for transaction steps
+
+@enduml
+`);
   const [activeFileId, setActiveFileId] = useState<string | null>(null);
   const [activeFileName, setActiveFileName] = useState<string | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
