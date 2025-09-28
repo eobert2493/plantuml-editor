@@ -2,6 +2,9 @@
 
 Design, split, and export PlantUML diagrams faster. This app is a focused, full‑screen PlantUML workspace with a Monaco editor, intelligent sectioning for large sequence diagrams, and one‑click exports (including stacked PDF). It’s built for engineers and architects who want an instant preview, smart navigation, and keyboard‑driven workflow.
 
+### Demo
+https://plantuml-editor.lovable.app/
+
 ### Why use this
 
 - **Move faster with big diagrams**: Split long sequence flows into labeled sections and jump between them or view them all stacked.
