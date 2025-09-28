@@ -1,4 +1,4 @@
-## Full Screen PlantUML
+# PlantUML Editor
 
 Design, split, and export PlantUML diagrams faster. This app is a focused, full‑screen PlantUML workspace with a Monaco editor, intelligent sectioning for large sequence diagrams, and one‑click exports (including stacked PDF). It’s built for engineers and architects who want an instant preview, smart navigation, and keyboard‑driven workflow.
 
@@ -70,18 +70,7 @@ Diagrams are encoded in the browser using `plantuml-encoder` and rendered by a P
 
 Renderer options (footer Settings → Renderer):
 - **Public**: `https://www.plantuml.com/plantuml`
-- **Custom**: any base you provide; example: `http://localhost:8080` or `http://localhost:8080/plantuml` if mounted behind a reverse proxy path. A health check indicator shows online/offline based on a minimal request to `<base>/svg/<encoded>`.
-
-Docker quick start (self‑hosted):
-```bash
-docker run -d --name plantuml -p 8080:8080 plantuml/plantuml-server:jetty
-```
-Then set the app Renderer to Custom with base `http://localhost:8080`.
-
-Test your server directly in a browser (should render SVG):
-```
-http://localhost:8080/svg/SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1
-```
+- **Custom**: any base you provide; example: `http://localhost:9090`
 
 #### Using a local PlantUML server with Docker (custom host port)
 
@@ -92,13 +81,9 @@ docker pull plantuml/plantuml-server:jetty
 docker run -d --name plantuml -p 9090:8080 plantuml/plantuml-server:jetty
 ```
 
-- In the app footer Settings, change Renderer from Public to Custom and set the base to `http://localhost:9090` (no trailing `/plantuml`).
+- In the app footer Settings, change Renderer from Public to Custom and set the base to `http://localhost:9090`.
 - The container always listens on port 8080 internally; you can bind any free host port to it using `-p <hostPort>:8080`.
-- Validate your local server by opening this in a browser:
-
-```
-http://localhost:9090/svg/SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1
-```
+- Validate the PlantUML Server is online by going to http://localhost:9090.
 
 ### Scripts
 
@@ -127,4 +112,4 @@ http://localhost:9090/svg/SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1
 
 ### License
 
-See the repository license file if present.
+This project is licensed under the MIT License
