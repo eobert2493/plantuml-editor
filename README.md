@@ -25,6 +25,25 @@ https://plantuml-editor.lovable.app/
 
 ### Quick start
 
+#### Option 1: Docker (Recommended)
+
+Prerequisites: Docker and Docker Compose
+
+```bash
+# Build and run the application with docker-compose
+docker-compose up -d
+
+# Or build and run with docker directly
+docker build -t plantuml-editor .
+docker run -d -p 8080:80 plantuml-editor
+```
+
+Open `http://localhost:8080`.
+
+By default, the editor uses the public PlantUML server (`https://www.plantuml.com/plantuml`). If you want to run your own PlantUML server locally, see the section below on "Using a local PlantUML server with Docker".
+
+#### Option 2: Local development
+
 Prerequisites: Node.js 18+ and npm
 
 ```bash
@@ -87,11 +106,20 @@ docker run -d --name plantuml -p 9090:8080 plantuml/plantuml-server:jetty
 
 ### Scripts
 
+#### NPM Scripts
 - `npm run dev`: Start Vite dev server
 - `npm run build`: Production build
 - `npm run build:dev`: Development‑mode build
 - `npm run preview`: Preview production build
 - `npm run lint`: Lint the project
+
+#### Docker Commands
+- `docker-compose up -d`: Start the editor in background
+- `docker-compose down`: Stop and remove container
+- `docker-compose logs -f`: View logs
+- `docker-compose restart`: Restart the editor
+- `docker build -t plantuml-editor .`: Build Docker image
+- `docker run -d -p 8080:80 plantuml-editor`: Run editor container
 
 ### Tech stack
 

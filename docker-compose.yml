@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  plantuml-editor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    container_name: plantuml-editor
+    environment:
+      - NODE_ENV=production
+

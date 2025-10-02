@@ -1,0 +1,17 @@
+node_modules
+npm-debug.log
+.git
+.gitignore
+.vscode
+.idea
+.DS_Store
+dist
+*.md
+!README.md
+.env*.local
+coverage
+.turbo
+.next
+.cache
+.eslintcache
+
