@@ -25,6 +25,13 @@ https://plantuml-editor.lovable.app/
 
 ### Quick start
 
+First, clone the repository:
+
+```bash
+git clone https://github.com/eobert2493/plantuml-editor.git
+cd plantuml-editor
+```
+
 #### Option 1: Docker (Recommended)
 
 Prerequisites: Docker and Docker Compose
