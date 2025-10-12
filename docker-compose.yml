@@ -6,9 +6,20 @@ services:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "2730:80"
     restart: unless-stopped
     container_name: plantuml-editor
     environment:
       - NODE_ENV=production
+    depends_on:
+      - plantuml-server
+
+  plantuml-server:
+    image: plantuml/plantuml-server:latest
+    container_name: plantuml-server
+    ports:
+      - "9090:8080"
+    restart: unless-stopped
+    environment:
+      - PLANTUML_LIMIT_SIZE=8192
 

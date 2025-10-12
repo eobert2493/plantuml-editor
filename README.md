@@ -1,6 +1,6 @@
 # PlantUML Editor
 
-Design, split, and export PlantUML diagrams faster. This app is a focused, full‑screen PlantUML workspace with a Monaco editor, intelligent sectioning for large sequence diagrams, and one‑click exports (including stacked PDF). It’s built for engineers and architects who want an instant preview, smart navigation, and keyboard‑driven workflow.
+Design, split, and export PlantUML diagrams faster. This app is a focused, full‑screen PlantUML workspace with a Monaco editor, intelligent sectioning for large sequence diagrams, and one‑click exports (including stacked PDF). It's built for engineers and architects who want an instant preview, smart navigation, and keyboard‑driven workflow.
 
 ### Demo
 https://plantuml-editor.lovable.app/
@@ -30,17 +30,11 @@ https://plantuml-editor.lovable.app/
 Prerequisites: Docker and Docker Compose
 
 ```bash
-# Build and run the application with docker-compose
+# Start both the editor and PlantUML server
 docker-compose up -d
-
-# Or build and run with docker directly
-docker build -t plantuml-editor .
-docker run -d -p 8080:80 plantuml-editor
 ```
 
-Open `http://localhost:8080`.
-
-By default, the editor uses the public PlantUML server (`https://www.plantuml.com/plantuml`). If you want to run your own PlantUML server locally, see the section below on "Using a local PlantUML server with Docker".
+The editor will be available at `http://localhost:2730` with a local PlantUML server automatically configured.
 
 #### Option 2: Local development
 
@@ -87,22 +81,7 @@ Notes:
 
 Diagrams are encoded in the browser using `plantuml-encoder` and rendered by a PlantUML server (`/svg` or `/png`). The stacked PDF export embeds section PNGs using `pdf-lib`.
 
-Renderer options (footer Settings → Renderer):
-- **Public**: `https://www.plantuml.com/plantuml`
-- **Custom**: any base you provide; example: `http://localhost:9090`
-
-#### Using a local PlantUML server with Docker (custom host port)
-
-If you prefer to run on a different host port (e.g., 9090), map your host port to the container’s 8080:
-
-```bash
-docker pull plantuml/plantuml-server:jetty
-docker run -d --name plantuml -p 9090:8080 plantuml/plantuml-server:jetty
-```
-
-- In the app footer Settings, change Renderer from Public to Custom and set the base to `http://localhost:9090`.
-- The container always listens on port 8080 internally; you can bind any free host port to it using `-p <hostPort>:8080`.
-- Validate the PlantUML Server is online by going to http://localhost:9090.
+When using Docker Compose, a local PlantUML server is automatically included and runs on port 9090. You can also switch to the public PlantUML server (`https://www.plantuml.com/plantuml`) in the footer Settings → Renderer if preferred.
 
 ### Scripts
 
@@ -114,12 +93,10 @@ docker run -d --name plantuml -p 9090:8080 plantuml/plantuml-server:jetty
 - `npm run lint`: Lint the project
 
 #### Docker Commands
-- `docker-compose up -d`: Start the editor in background
-- `docker-compose down`: Stop and remove container
+- `docker-compose up -d`: Start the editor and PlantUML server in background
+- `docker-compose down`: Stop and remove containers
 - `docker-compose logs -f`: View logs
-- `docker-compose restart`: Restart the editor
-- `docker build -t plantuml-editor .`: Build Docker image
-- `docker run -d -p 8080:80 plantuml-editor`: Run editor container
+- `docker-compose restart`: Restart services
 
 ### Tech stack
 

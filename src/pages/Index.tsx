@@ -1,20 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { PlantUMLEditor } from "@/components/PlantUMLEditor";
 import { DiagramViewer } from "@/components/DiagramViewer";
-import { LocalFilesSidebar } from "@/components/LocalFilesSidebar";
 import { ResizableLayout } from "@/components/ResizableLayout";
 import { ensureDefault, getFile, updateFileContent, createFile, listFiles, renameFile, deleteFile } from "@/lib/fileStore";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Command, CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
-import { Moon, Sun, Palette, Settings } from "lucide-react";
+import { Moon, Sun, Palette, Settings, Maximize2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import MarkdownView from "@/components/MarkdownView";
 
 const Index = () => {
   const [plantUMLCode, setPlantUMLCode] = useState(`@startuml
@@ -251,65 +249,7 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isKeybindsOpen, setIsKeybindsOpen] = useState(false);
-
-  // Right pane: markdown content by id (from ' md:<id>:' comment blocks)
-  const [activePaneId, setActivePaneId] = useState<string | null>(null);
-  const [activePaneTitle, setActivePaneTitle] = useState<string>("");
-  const [activePaneMarkdown, setActivePaneMarkdown] = useState<string>("");
-
-  // Parse markdown blocks. Supported syntaxes:
-  // 1) Single-line comments wrapper:
-  //    ' md:<id>: Optional Title
-  //    ' Markdown line 1
-  //    ' Markdown line 2
-  //    ' /md
-  // 2) PlantUML block comments wrapper for easier multiline:
-  //    /' md:<id>: Optional Title
-  //    Markdown line 1
-  //    Markdown line 2
-  //    '/
-  const parseMarkdownBlocks = useCallback((code: string) => {
-    const lines = code.split('\n');
-    const blocks: Record<string, { title: string; body: string }> = {};
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      const startBlock = line.match(/^\/'\s*md:([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
-      if (startBlock) {
-        const id = startBlock[1];
-        const title = (startBlock[2] || '').trim();
-        i += 1;
-        const bodyLines: string[] = [];
-        while (i < lines.length && !/^'\s*\/$/.test(lines[i])) {
-          bodyLines.push(lines[i]);
-          i += 1;
-        }
-        blocks[id] = { title, body: bodyLines.join('\n') };
-        i += 1;
-        continue;
-      }
-      const startLine = line.match(/^'\s*md:([a-zA-Z0-9_-]+)\s*:\s*(.*)$/);
-      if (startLine) {
-        const id = startLine[1];
-        const title = (startLine[2] || '').trim();
-        i += 1;
-        const bodyLines: string[] = [];
-        while (i < lines.length && !/^'\s*\/md\s*$/.test(lines[i])) {
-          const l = lines[i];
-          const mdLine = l.replace(/^'\s?/, "");
-          bodyLines.push(mdLine);
-          i += 1;
-        }
-        blocks[id] = { title, body: bodyLines.join('\n') };
-        i += 1;
-        continue;
-      }
-      i += 1;
-    }
-    return blocks;
-  }, []);
-
-  const markdownBlocks = parseMarkdownBlocks(plantUMLCode);
+  const [zenMode, setZenMode] = useState(false);
 
   const [showLeftPanel, setShowLeftPanel] = useState(() => {
     try {
@@ -320,28 +260,19 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
     }
   });
 
-  const [showFilesSidebar, setShowFilesSidebar] = useState(() => {
-    try {
-      const saved = localStorage.getItem('plantuml-show-files-sidebar');
-      return saved ? JSON.parse(saved) : true;
-    } catch {
-      return true;
-    }
-  });
-
   type ServerMode = 'public' | 'custom';
   const [plantumlServerMode, setPlantumlServerMode] = useState<ServerMode>(() => {
     try {
-      return (localStorage.getItem('plantuml-server-mode') as ServerMode) || 'public';
+      return (localStorage.getItem('plantuml-server-mode') as ServerMode) || 'custom';
     } catch {
-      return 'public';
+      return 'custom';
     }
   });
   const [plantumlServerBase, setPlantumlServerBase] = useState<string>(() => {
     try {
-      return localStorage.getItem('plantuml-server-base') || 'http://localhost:8080/plantuml';
+      return localStorage.getItem('plantuml-server-base') || 'http://localhost:9090';
     } catch {
-      return 'http://localhost:8080/plantuml';
+      return 'http://localhost:9090';
     }
   });
   const normalizedServerBase = (plantumlServerMode === 'custom' ? plantumlServerBase : 'https://www.plantuml.com/plantuml').replace(/\/$/, '');
@@ -418,6 +349,13 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
   }, [normalizedServerBase]);
 
   const handleKeyDown = useCallback((event: KeyboardEvent) => {
+    // Handle Escape key to exit zen mode
+    if (event.key === 'Escape' && zenMode) {
+      event.preventDefault();
+      setZenMode(false);
+      return;
+    }
+    
     if (matchesBinding(event, keyBindings.toggleEditor)) {
       event.preventDefault();
       const newShowLeftPanel = !showLeftPanel;
@@ -455,7 +393,7 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
       handleRefresh();
       return;
     }
-  }, [showLeftPanel, vimModeEnabled, keyBindings, splitOrientation]);
+  }, [showLeftPanel, vimModeEnabled, keyBindings, splitOrientation, zenMode]);
 
   useEffect(() => {
     document.addEventListener('keydown', handleKeyDown);
@@ -467,13 +405,6 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Local Files Sidebar */}
-        {false && showFilesSidebar && (
-          <div className="w-72 border-r border-editor-border bg-editor-background">
-            <LocalFilesSidebar activeFileId={activeFileId} onSelectFile={handleSelectFile} onActiveFileRenamed={(n) => setActiveFileName(n)} />
-          </div>
-        )}
-
         {/* Editor and Viewer */}
         <div className="flex-1">
           {(() => {
@@ -484,6 +415,7 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
                 onRefresh={handleRefresh}
                 editorTheme={editorTheme}
                 vimModeEnabled={vimModeEnabled}
+                zenMode={zenMode}
                 editorOptions={{
                   renderWhitespace: 'selection',
                   guides: { indentation: true, bracketPairs: true },
@@ -510,36 +442,15 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
                 onRefresh={handleRefresh}
                 serverBase={normalizedServerBase}
                 fileName={activeFileName}
+                pageTheme={pageTheme}
+                zenMode={zenMode}
+                onExitZenMode={() => setZenMode(false)}
                 onRenameFile={async (newName) => {
                   if (!activeFileId) return;
                   await renameFile(activeFileId, newName);
                   setActiveFileName(newName);
                 }}
-                onPaneLinkClick={(paneId) => {
-                  const blk = markdownBlocks[paneId];
-                  setActivePaneId(paneId);
-                  setActivePaneTitle(blk?.title || paneId);
-                  setActivePaneMarkdown(blk?.body || `No markdown found for "${paneId}".`);
-                }}
               />
-            );
-            const viewerInline = (
-              <div className="h-full flex flex-col">
-                {viewerEl}
-                {activePaneId && (
-                  <div className="mt-2 mx-4 mb-4 border border-editor-border rounded-lg overflow-hidden bg-editor-panel">
-                    <div className="px-3 py-2 border-b border-editor-border flex items-center justify-between">
-                      <div className="text-sm font-medium text-editor-text truncate">{activePaneTitle}</div>
-                      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => setActivePaneId(null)}>Close</Button>
-                    </div>
-                    <div className="p-4">
-                      <div className="prose prose-invert max-w-none text-sm">
-                        <MarkdownView markdown={activePaneMarkdown} />
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
             );
             const isVertical = splitOrientation === 'vertical';
             const layoutProps = isVertical
@@ -550,8 +461,8 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
                 )
               : (
                   showLeftPanel
-                    ? { leftPanel: editorEl, rightPanel: viewerInline, hideLeftPanel: false as const }
-                    : { leftPanel: null, rightPanel: viewerInline, hideLeftPanel: true as const }
+                    ? { leftPanel: editorEl, rightPanel: viewerEl, hideLeftPanel: false as const }
+                    : { leftPanel: null, rightPanel: viewerEl, hideLeftPanel: true as const }
                 );
             return (
               <ResizableLayout
@@ -567,7 +478,8 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
       </div>
 
       {/* Footer */}
-      <footer className="bg-editor-panel border-t border-editor-border px-4 py-2">
+      {!zenMode && (
+      <footer className="bg-footer-bg border-t border-footer-border px-4 py-2">
         <div className="flex items-center justify-between text-xs text-editor-comment">
           <div className="flex items-center gap-3">
             <Button
@@ -601,6 +513,25 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
             )}
           </div>
           <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs"
+                    onClick={() => setZenMode(true)}
+                    title="Enter Zen Mode (hide header & footer)"
+                  >
+                    <Maximize2 className="w-3 h-3 mr-1" />
+                    Zen Mode
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-xs">Hide header & footer for distraction-free viewing</div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -676,17 +607,17 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
                 <div className="px-2 py-1.5">
                   <div className="text-[11px] uppercase tracking-wide text-editor-comment mb-1">Renderer</div>
                   <div className="flex items-center gap-2 text-xs">
-                    <Button size="sm" variant={plantumlServerMode === 'public' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('public'); try { localStorage.setItem('plantuml-server-mode','public'); } catch {} }}>Public</Button>
                     <Button size="sm" variant={plantumlServerMode === 'custom' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('custom'); try { localStorage.setItem('plantuml-server-mode','custom'); } catch {} }}>Custom</Button>
+                    <Button size="sm" variant={plantumlServerMode === 'public' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('public'); try { localStorage.setItem('plantuml-server-mode','public'); } catch {} }}>Public</Button>
                   </div>
                   {plantumlServerMode === 'custom' && (
                     <div className="mt-2 space-y-1">
-                      <div className="text-[11px] text-editor-comment">Server base (e.g. http://localhost:8080/plantuml)</div>
+                      <div className="text-[11px] text-editor-comment">Server base (e.g. http://localhost:9090)</div>
                       <Input
                         value={plantumlServerBase}
                         onChange={(e) => { setPlantumlServerBase(e.target.value); try { localStorage.setItem('plantuml-server-base', e.target.value); } catch {} }}
                         className="h-7 text-xs"
-                        placeholder="http://localhost:8080/plantuml"
+                        placeholder="http://localhost:9090"
                       />
                     </div>
                   )}
@@ -704,6 +635,7 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
           </div>
         </div>
       </footer>
+      )}
 
       {/* Removed drawer sheet; right pane is inline below viewer */}
 
@@ -923,15 +855,6 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
             </CommandGroup>
             <CommandSeparator />
             <CommandGroup heading="Actions">
-              <CommandItem onSelect={() => {
-                const next = !vimModeEnabled;
-                setVimModeEnabled(next);
-                try { localStorage.setItem('plantuml-vim-mode', JSON.stringify(next)); } catch {}
-                setIsFilePaletteOpen(false);
-                toast.success(`Vim mode ${next ? 'enabled' : 'disabled'}`);
-              }}>
-                Toggle Vim mode {vimModeEnabled ? '(On)' : '(Off)'}
-              </CommandItem>
               <CommandItem onSelect={async () => {
                 const created = await createFile('Untitled.puml', '@startuml\n@enduml\n');
                 await handleSelectFile(created.id);

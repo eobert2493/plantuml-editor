@@ -48,6 +48,16 @@ All colors MUST be HSL.
     --editor-keyword: 217 91% 60%;
     --editor-string: 142 76% 30%;
     --editor-number: 31 100% 50%;
+    
+    /* Section container colors for light */
+    --section-container-bg: 0 0% 100%;
+    --section-container-border: 214 20% 85%;
+    --section-header-bg: 214 20% 95%;
+    --section-header-text: 220 13% 25%;
+
+    /* Footer colors for light */
+    --footer-bg: 214 20% 96%;
+    --footer-border: 214 20% 88%;
 
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(217 91% 60%), hsl(217 91% 70%));
@@ -113,6 +123,16 @@ All colors MUST be HSL.
     --editor-keyword: 217 91% 65%;
     --editor-string: 142 76% 65%;
     --editor-number: 31 100% 70%;
+    
+    /* Section container colors for dark */
+    --section-container-bg: 220 13% 13%;
+    --section-container-border: 220 13% 25%;
+    --section-header-bg: 220 13% 18%;
+    --section-header-text: 220 9% 85%;
+
+    /* Footer colors for dark */
+    --footer-bg: 220 13% 14%;
+    --footer-border: 220 13% 22%;
 
     /* Ensure page gradient matches dark background to avoid light bleed with rounded containers */
     --gradient-background: linear-gradient(180deg, hsl(222.2 84% 4.9%), hsl(217.2 32.6% 17.5%));
@@ -153,5 +173,17 @@ All colors MUST be HSL.
   }
   .scrollbar-themed::-webkit-scrollbar-thumb:hover {
     background-color: hsl(var(--editor-text));
+  }
+
+  /* Prevent horizontal overflow in stacked sections */
+  .stacked-section-content {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  
+  .stacked-section-content svg {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block;
   }
 }

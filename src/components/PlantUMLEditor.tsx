@@ -18,6 +18,7 @@ interface PlantUMLEditorProps {
   editorTheme?: 'vs-dark' | 'vs-light' | 'hc-black' | 'plantuml-dark' | 'dracula' | 'monokai' | 'solarized-dark' | 'solarized-light' | 'github-dark' | 'github-light';
   editorOptions?: Partial<monaco.editor.IStandaloneEditorConstructionOptions>;
   vimModeEnabled?: boolean;
+  zenMode?: boolean;
 }
 
 interface CodeSection {
@@ -27,7 +28,7 @@ interface CodeSection {
   icon: string;
 }
 
-export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false, editorTheme = 'plantuml-dark', editorOptions = {}, vimModeEnabled = false }: PlantUMLEditorProps) => {
+export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full', onTabChange, hasSetupContent = false, hasSequenceContent = false, editorTheme = 'plantuml-dark', editorOptions = {}, vimModeEnabled = false, zenMode = false }: PlantUMLEditorProps) => {
   
   // Define code sections
   const codeSections: Record<string, CodeSection> = {
@@ -400,33 +401,35 @@ export const PlantUMLEditor = ({ value, onChange, onRefresh, activeTab = 'full',
 
   return (
     <Card className="h-full bg-editor-panel border-editor-border flex flex-col">
-      <div className="flex items-center justify-between p-3 border-b border-editor-border">
-        <div className="flex items-center gap-2">
-          <FileText className="w-4 h-4 text-editor-keyword" />
-          <h3 className="text-sm font-medium text-editor-text">PlantUML Editor</h3>
-        </div>
-        <div className="flex items-center gap-2">
-          <div ref={vimStatusRef} className="text-[10px] text-editor-comment min-w-[40px] text-right">
-            {vimModeEnabled ? 'VIM' : ''}
+      {!zenMode && (
+        <div className="flex items-center justify-between p-3 border-b border-editor-border">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-editor-keyword" />
+            <h3 className="text-sm font-medium text-editor-text">PlantUML Editor</h3>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleCopy}
-            className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-          >
-            <Copy className="w-3 h-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleExport}
-            className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
-          >
-            <Download className="w-3 h-3" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <div ref={vimStatusRef} className="text-[10px] text-editor-comment min-w-[40px] text-right">
+              {vimModeEnabled ? 'VIM' : ''}
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+            >
+              <Copy className="w-3 h-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExport}
+              className="h-8 w-8 p-0 text-editor-comment hover:text-editor-text hover:bg-editor-background"
+            >
+              <Download className="w-3 h-3" />
+            </Button>
+          </div>
         </div>
-      </div>
+      )}
       
       <div className="flex-1 overflow-hidden">
         <Editor

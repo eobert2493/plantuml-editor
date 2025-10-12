@@ -67,6 +67,20 @@ export default {
           string: "hsl(var(--editor-string))",
           number: "hsl(var(--editor-number))",
         },
+        section: {
+          container: {
+            bg: "hsl(var(--section-container-bg))",
+            border: "hsl(var(--section-container-border))",
+          },
+          header: {
+            bg: "hsl(var(--section-header-bg))",
+            text: "hsl(var(--section-header-text))",
+          },
+        },
+        footer: {
+          bg: "hsl(var(--footer-bg))",
+          border: "hsl(var(--footer-border))",
+        },
       },
       backgroundImage: {
         'gradient-primary': 'var(--gradient-primary)',
