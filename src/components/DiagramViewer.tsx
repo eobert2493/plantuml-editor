@@ -29,9 +29,11 @@ interface DiagramViewerProps {
   pageTheme?: 'light' | 'dark';
   zenMode?: boolean;
   onExitZenMode?: () => void;
+  isServerOnline?: boolean | null;
+  serverMode?: 'public' | 'custom';
 }
 
-export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileName, onRenameFile, serverBase = 'https://www.plantuml.com/plantuml', pageTheme = 'dark', zenMode = false, onExitZenMode }: DiagramViewerProps) => {
+export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileName, onRenameFile, serverBase = 'https://www.plantuml.com/plantuml', pageTheme = 'dark', zenMode = false, onExitZenMode, isServerOnline, serverMode }: DiagramViewerProps) => {
   const [diagramUrl, setDiagramUrl] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>("");
@@ -52,6 +54,17 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
   
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const svgContainerRef = useRef<HTMLDivElement>(null);
+  const wasServerOfflineRef = useRef(false);
+  
+  // Track when server transitions from offline to online
+  useEffect(() => {
+    if (isServerOnline === false) {
+      wasServerOfflineRef.current = true;
+    } else if (isServerOnline === true && !error) {
+      // Reset flag when error is cleared (diagram loaded successfully)
+      wasServerOfflineRef.current = false;
+    }
+  }, [isServerOnline, error]);
   
   // Custom hooks
   const svgHtml = useSvgFetcher(diagramUrl, viewMode);
@@ -142,10 +155,6 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       
       setLastGeneratedCode(plantUMLCode);
       setNeedsRefresh(false);
-      // Only toast when this was an explicit refresh (not the very first generation)
-      if (lastGeneratedCode !== "") {
-        toast.success("Diagram updated!");
-      }
     } catch (err) {
       setError("Invalid PlantUML syntax");
       console.error("PlantUML encoding error:", err);
@@ -181,7 +190,6 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
   // Helper functions
   const handleRefresh = () => {
     generateDiagram();
-    toast.success("Diagram refreshed!");
   };
 
   const handleSectionChange = (index: number) => {
@@ -313,7 +321,7 @@ export const DiagramViewer = ({ plantUMLCode, onRefresh, refreshTrigger, fileNam
       >
         
         {error ? (
-          <ErrorState error={error} />
+          <ErrorState error={error} isServerOnline={isServerOnline} serverMode={serverMode} wasServerOffline={wasServerOfflineRef.current} />
         ) : !plantUMLCode.trim() ? (
           <EmptyDiagramState />
         ) : viewMode === 'stacked' && sections.length > 0 ? (

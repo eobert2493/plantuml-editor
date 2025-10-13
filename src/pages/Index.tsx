@@ -323,28 +323,37 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
   };
 
   useEffect(() => {
-    const check = () => {
+    const check = async () => {
       const encoded = "SoWkIImgAStDuNBAJrBGjLDmpCbCJbMmKiX8pSd9pKi1";
-      const url = `${normalizedServerBase}/svg/${encoded}`;
-      const img = new Image();
-      let settled = false;
-      const timer = setTimeout(() => {
-        if (!settled) setIsServerOnline(false);
-      }, 5000);
-      img.onload = () => {
-        settled = true;
-        clearTimeout(timer);
-        setIsServerOnline(true);
-      };
-      img.onerror = () => {
-        settled = true;
-        clearTimeout(timer);
+      // Add timestamp to prevent caching
+      const url = `${normalizedServerBase}/svg/${encoded}?t=${Date.now()}`;
+      
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          signal: controller.signal,
+          cache: 'no-store',
+        });
+        
+        clearTimeout(timeoutId);
+        
+        // Check if we got a valid response (2xx status)
+        if (response.ok) {
+          setIsServerOnline(true);
+        } else {
+          setIsServerOnline(false);
+        }
+      } catch (error) {
+        // Any error (network, timeout, CORS, etc.) means server is offline
         setIsServerOnline(false);
-      };
-      img.src = url;
+      }
     };
+    
     check();
-    const id = setInterval(check, 30000);
+    const id = setInterval(check, 15000); // Check every 15 seconds
     return () => clearInterval(id);
   }, [normalizedServerBase]);
 
@@ -445,6 +454,8 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
                 pageTheme={pageTheme}
                 zenMode={zenMode}
                 onExitZenMode={() => setZenMode(false)}
+                isServerOnline={isServerOnline}
+                serverMode={plantumlServerMode}
                 onRenameFile={async (newName) => {
                   if (!activeFileId) return;
                   await renameFile(activeFileId, newName);
@@ -541,7 +552,14 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
                   />
                 </TooltipTrigger>
                 <TooltipContent>
-                  <div className="text-xs">Renderer status: {isServerOnline ? 'Online' : isServerOnline === false ? 'Offline' : 'Checking…'}</div>
+                  <div className="text-xs max-w-[280px] space-y-1">
+                    <div>Renderer status: {isServerOnline ? 'Online' : isServerOnline === false ? 'Offline' : 'Checking…'}</div>
+                    {isServerOnline === false && plantumlServerMode === 'custom' && (
+                      <div className="text-editor-comment pt-1 border-t border-editor-border mt-1">
+                        Local server unavailable. Switch to Public in Settings or start the local server.
+                      </div>
+                    )}
+                  </div>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
@@ -549,14 +567,14 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="text-xs">
-                    {plantumlServerMode === 'public' ? 'Public' : 'Custom'}
+                    {plantumlServerMode === 'public' ? 'Public' : 'Local'}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="text-xs max-w-[260px]">
                     {plantumlServerMode === 'public'
                       ? 'Using the public PlantUML server (https://www.plantuml.com/plantuml). This is best for quick previews.'
-                      : `Using a custom PlantUML server at ${plantumlServerBase}. Useful for offline or self-hosted rendering.`}
+                      : `Using a local PlantUML server at ${plantumlServerBase}. Useful for offline or self-hosted rendering.`}
                   </div>
                 </TooltipContent>
               </Tooltip>
@@ -607,7 +625,7 @@ ref over App,DB : See "Data Access (DAO)" for transaction steps
                 <div className="px-2 py-1.5">
                   <div className="text-[11px] uppercase tracking-wide text-editor-comment mb-1">Renderer</div>
                   <div className="flex items-center gap-2 text-xs">
-                    <Button size="sm" variant={plantumlServerMode === 'custom' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('custom'); try { localStorage.setItem('plantuml-server-mode','custom'); } catch {} }}>Custom</Button>
+                    <Button size="sm" variant={plantumlServerMode === 'custom' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('custom'); try { localStorage.setItem('plantuml-server-mode','custom'); } catch {} }}>Local</Button>
                     <Button size="sm" variant={plantumlServerMode === 'public' ? 'secondary' : 'ghost'} onClick={() => { setPlantumlServerMode('public'); try { localStorage.setItem('plantuml-server-mode','public'); } catch {} }}>Public</Button>
                   </div>
                   {plantumlServerMode === 'custom' && (
