@@ -41,7 +41,7 @@ Prerequisites: Docker and Docker Compose
 docker-compose up -d
 ```
 
-The editor will be available at `http://localhost:2730` with a local PlantUML server automatically configured.
+The editor will be available at `http://localhost:2730` with a local PlantUML server running at `http://localhost:9090`. The by default points to a custom port of 9090.
 
 #### Option 2: Local development
 
@@ -53,6 +53,13 @@ npm run dev
 ```
 
 Open `http://localhost:8080`.
+
+To run the PlantUML renderer locally, run the following commands:
+
+```bash
+docker pull plantuml/plantuml-server:jetty
+docker run -d -p 9090:8080 plantuml/plantuml-server:jetty
+```
 
 ### Usage
 
